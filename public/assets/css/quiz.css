@@ -1,0 +1,785 @@
+/*
+  Assessment flow — quiz-intro.ejs, quiz-paper.ejs, showAnswer.ejs,
+  openHomework.ejs.
+
+  LAYERS ON TOP OF home.css AND listing.css. Load order in every view is
+  tokens.css -> home.css -> listing.css -> quiz.css.
+
+  These four pages reuse .site-header, .site-nav, .container, .section, .card,
+  .btn, .reveal, .to-top and .site-footer from home.css, and .page-hero,
+  .crumbs, .chip, .meta-row, .num, .badge, .empty and .notice from listing.css.
+  Only the assessment-specific components live here.
+
+  WHAT THIS REPLACES
+  The three startQuiz copies loaded public/startQuizNew/ — a CodingNepal demo
+  theme carrying a 445 KB background JPG, an 845 KB applause.mp3, and a
+  script.js that threw a TypeError on load (it queries `.buttons .restart`,
+  which does not exist in the markup, then assigns to it). It also pulled a
+  questions.js that is not on disk at all — a guaranteed 404 on every visit.
+  The three showQuestion copies and showAnswer loaded public/show answer/,
+  whose script.js is a zero-byte file and whose directory name contains an
+  unencoded space in every href.
+
+  Breakpoints follow the canonical set documented in tokens.css:
+      sm 560px  ·  md 768px  ·  lg 992px  ·  xl 1200px
+*/
+
+/* Semantic colours for grading. Deliberately local: nothing outside the
+   assessment flow has a notion of "correct" or "wrong", so these do not belong
+   in the shared token layer. Both are checked against #fff at 4.5:1. */
+.paper,
+.answer-key,
+.as-grid,
+.intro {
+  --c-ok: #0f7b47;
+  --c-ok-tint: #e7f5ee;
+  --c-bad: #b3242f;
+  --c-bad-tint: #fdecec;
+}
+
+/* =============================================================== intro ======
+   Shown before a quiz / exam / homework starts. The old page was an English
+   CodingNepal template: lang="en", title "Awesome Quiz App | Programminf
+   w/Shadab", and four hard-coded rules — one of which ("5 Minutes per each
+   question") was simply untrue, since quizTime is a single budget for the
+   whole paper and homework has no limit at all. The rules are now generated
+   from the record being opened. */
+.intro {
+  max-width: var(--container-narrow);
+  margin-inline: auto;
+}
+
+.intro__card {
+  overflow: hidden;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+}
+
+.intro__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-6);
+  color: #fff;
+  background: var(--grad-brand);
+}
+
+.intro__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 56px;
+  block-size: 56px;
+  border-radius: var(--r-md);
+  background: rgb(255 255 255 / 0.18);
+}
+
+.intro__icon svg {
+  inline-size: 28px;
+  block-size: 28px;
+}
+
+.intro__titles {
+  min-inline-size: 0;
+}
+
+.intro__kind {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  opacity: 0.85;
+  margin: 0;
+}
+
+.intro__title {
+  font-size: var(--fs-h3);
+  font-weight: 800;
+  /* Positive tracking breaks Arabic cursive joining. */
+  letter-spacing: 0;
+  line-height: var(--lh-tight);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.intro__body {
+  padding: var(--sp-6);
+}
+
+.intro__facts {
+  display: grid;
+  gap: var(--sp-3);
+  grid-template-columns: 1fr;
+  margin: 0 0 var(--sp-6);
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 560px) {
+  .intro__facts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.intro__fact {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+}
+
+.intro__fact svg {
+  inline-size: 22px;
+  block-size: 22px;
+  flex: none;
+  color: var(--c-primary);
+}
+
+.intro__fact-label {
+  display: block;
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+}
+
+.intro__fact-value {
+  display: block;
+  font-weight: 700;
+  color: var(--c-ink);
+}
+
+.intro__rules {
+  margin: 0 0 var(--sp-6);
+  /* Logical, so the counters sit on the right in RTL without an override. */
+  padding-inline-start: var(--sp-5);
+  color: var(--c-body);
+}
+
+.intro__rules li + li {
+  margin-block-start: var(--sp-2);
+}
+
+.intro__rules strong {
+  color: var(--c-ink);
+}
+
+.intro__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  align-items: center;
+}
+
+/* The submit button and the exit link sit in one row; the form must not
+   introduce block-level layout of its own. */
+.intro__actions form {
+  margin: 0;
+}
+
+/* =============================================================== paper ======
+   The question paper itself. Every question is on one page inside a single
+   form, as before — the POST body shape (answer0..answerN, read by
+   req.body[`answer${i}`]) is unchanged.
+
+   The old markup opened a <form> inside the per-question loop but closed it
+   only inside `if (i === last)`, so N-1 form tags were never closed. It
+   happened to work: the HTML parser ignores a <form> start tag while a form
+   element pointer is already set, so every radio ended up in the first form.
+   It is now one form opened once, around the loop. */
+.paper {
+  max-width: 860px;
+  margin-inline: auto;
+}
+
+/* --------------------------------------------------------------- timer ---
+   Sticky so it stays reachable on a long paper. Offset by the site header so
+   the two never overlap. Rendered only when the paper is timed — homework has
+   no limit, and previously showed a countdown reading "00:00:00" regardless. */
+.paper__timer {
+  position: sticky;
+  inset-block-start: calc(var(--header-h) + var(--sp-2));
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-block-end: var(--sp-6);
+  padding: var(--sp-3) var(--sp-5);
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-pill);
+  box-shadow: var(--sh-1);
+}
+
+.paper__timer svg {
+  inline-size: 20px;
+  block-size: 20px;
+  flex: none;
+  color: var(--c-primary);
+}
+
+.paper__timer-label {
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
+}
+
+/* A clock reading is a Latin digit run inside an RTL line. Without isolation
+   the colon is a neutral and the segments can reorder, so 01:20 renders as
+   20:01. The markup also carries dir="ltr" on this element. */
+.paper__clock {
+  font-weight: 800;
+  font-size: var(--fs-lg);
+  color: var(--c-ink);
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.paper__timer--low .paper__clock {
+  color: var(--c-bad);
+}
+
+.paper__timer--low svg {
+  color: var(--c-bad);
+}
+
+/* Progress is animated as a percentage inline-size rather than scaleX:
+   transform does not mirror under dir="rtl", so scaleX would grow from the
+   wrong edge and need an override. inline-size follows the writing mode. */
+.paper__track {
+  flex: 1;
+  min-inline-size: 80px;
+  block-size: 6px;
+  overflow: hidden;
+  background: var(--c-line);
+  border-radius: var(--r-pill);
+}
+
+.paper__bar {
+  block-size: 100%;
+  inline-size: 100%;
+  background: var(--grad-brand);
+  border-radius: var(--r-pill);
+  transition: inline-size 1s linear;
+}
+
+.paper__timer--low .paper__bar {
+  background: var(--c-bad);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paper__bar {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------ question ---- */
+.q {
+  padding: var(--sp-6);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+}
+
+.q + .q {
+  margin-block-start: var(--sp-5);
+}
+
+/* Marks a question left blank once the student has tried to submit. */
+.q.is-missing {
+  border-color: var(--c-bad);
+  box-shadow: 0 0 0 3px var(--c-bad-tint);
+}
+
+.q__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin-block-end: var(--sp-5);
+}
+
+.q__num {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 34px;
+  block-size: 34px;
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  color: #fff;
+  background: var(--grad-brand);
+  border-radius: 50%;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.q__text {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: var(--lh-tight);
+  color: var(--c-ink);
+  margin: 0;
+  /* The paper is Arabic but a question may be a Latin formula or term. */
+  overflow-wrap: anywhere;
+}
+
+/* The old page hard-coded width="400px" on every question image, so on a
+   360px phone each one pushed the layout into horizontal scroll. */
+.q__figure {
+  margin: 0 0 var(--sp-5);
+}
+
+.q__figure img {
+  inline-size: auto;
+  max-inline-size: 100%;
+  max-block-size: 420px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  background: var(--c-surface-alt);
+}
+
+/* ------------------------------------------------------------- options ---- */
+.q__options {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+/* A real <label> wrapping the radio, so the whole row is the hit target. The
+   old markup put the input next to a bare text node inside a div with
+   cursor:pointer — visually clickable, but only the 13px radio actually
+   selected anything, and nothing was associated for a screen reader. */
+.opt {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  /* Comfortably past the 44px minimum tap target. */
+  min-block-size: 52px;
+  padding: var(--sp-3) var(--sp-4);
+  cursor: pointer;
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  transition: border-color var(--dur-1) var(--ease),
+    background-color var(--dur-1) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .opt:hover {
+    border-color: var(--c-primary);
+    background: var(--c-primary-tint);
+  }
+}
+
+/* The visible ring must follow the input's focus, not the label's — the label
+   is not focusable. :has() is supported everywhere IntersectionObserver is,
+   which this stack already requires. */
+.opt:has(input:focus-visible) {
+  outline: 3px solid var(--c-focus);
+  outline-offset: 2px;
+}
+
+.opt:has(input:checked) {
+  border-color: var(--c-primary);
+  background: var(--c-primary-tint);
+  font-weight: 700;
+}
+
+.opt input {
+  flex: none;
+  inline-size: 20px;
+  block-size: 20px;
+  margin: 0;
+  accent-color: var(--c-primary);
+}
+
+.opt__text {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .opt {
+    transition: none;
+  }
+}
+
+/* -------------------------------------------------------------- submit ---- */
+.paper__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-block-start: var(--sp-6);
+  padding: var(--sp-5);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+}
+
+.paper__count {
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
+  margin: 0;
+}
+
+.paper__count strong {
+  color: var(--c-ink);
+}
+
+/* Warning shown when the student submits with questions still blank. Hidden
+   until JS sets [hidden] off, and never blocks submission on its own. */
+.paper__warn {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-basis: 100%;
+  padding: var(--sp-4);
+  font-size: var(--fs-sm);
+  color: var(--c-bad);
+  background: var(--c-bad-tint);
+  border: 1px solid var(--c-bad);
+  border-radius: var(--r-md);
+}
+
+.paper__warn svg {
+  inline-size: 20px;
+  block-size: 20px;
+  flex: none;
+}
+
+/* ========================================================== answer key ===== */
+.answer-key {
+  max-width: 860px;
+  margin-inline: auto;
+}
+
+/* The student's own result, which the old answer-key page never showed at all —
+   it printed the correct answers with no indication of how they had done. */
+.ak-score {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--sp-2);
+  margin-block-end: var(--sp-6);
+  padding: var(--sp-5);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+}
+
+.ak-score__value {
+  font-size: var(--fs-h1);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--c-ok);
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Under half. */
+.ak-score--low .ak-score__value {
+  color: var(--c-bad);
+}
+
+.ak-score__label {
+  color: var(--c-muted);
+}
+
+/* Amber variant of listing.css's .notice, for "this record is inconsistent"
+   rather than "you are in the wrong place". Used when a question's stored
+   correct answer is not among its stored options. The base .notice is a flex
+   container with a <p> child; here the element IS the paragraph, so the
+   browser default margin has to go. */
+.notice--warn {
+  margin: var(--sp-4) 0 0;
+  color: #7a4a05;
+  background: #fff6e5;
+  border-color: rgb(180 120 10 / 0.35);
+  border-inline-start-color: #b4780a;
+}
+
+.notice--warn strong {
+  color: inherit;
+}
+
+.ak-q {
+  padding: var(--sp-6);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+}
+
+.ak-q + .ak-q {
+  margin-block-start: var(--sp-5);
+}
+
+.ak-opts {
+  display: grid;
+  gap: var(--sp-2);
+  margin-block-start: var(--sp-4);
+}
+
+.ak-opt {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+}
+
+/* The correct option is marked by colour AND by a tick plus the word
+   "الإجابة الصحيحة" — colour alone fails WCAG 1.4.1, and this page is
+   frequently read on a phone in bright sun. */
+.ak-opt--correct {
+  color: var(--c-ok);
+  font-weight: 700;
+  background: var(--c-ok-tint);
+  border-color: var(--c-ok);
+}
+
+.ak-opt__mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 22px;
+  block-size: 22px;
+  border-radius: 50%;
+  color: transparent;
+}
+
+.ak-opt--correct .ak-opt__mark {
+  color: #fff;
+  background: var(--c-ok);
+}
+
+.ak-opt__mark svg {
+  inline-size: 14px;
+  block-size: 14px;
+}
+
+.ak-opt__tag {
+  margin-inline-start: auto;
+  flex: none;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+
+/* ===================================================== assessment list ===== */
+/* ONE list block, shared by the exam list (openExam.ejs), the quiz list
+   (showQuizEg.ejs) and the homework list (openHomework.ejs) — all three were
+   the same Bootstrap `.row.g-5` of `.service-item` cards, forked three ways and
+   then drifted: the exam copy had a two-branch date check, the quiz copy had a
+   three-deep null guard, the homework copy had nested .find() callbacks. They
+   now render from one view against one `items` contract.
+
+   A real <ul>: these are lists, and the count is announced. */
+.as-grid {
+  display: grid;
+  gap: var(--sp-5);
+  grid-template-columns: 1fr;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 560px) {
+  .as-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 992px) {
+  .as-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Built on .card, which sets flex-direction: column — that is what this wants,
+   so it is not restated. */
+.as-card {
+  padding: var(--sp-5);
+  gap: var(--sp-4);
+}
+
+.as-card__top {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+
+.as-card__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: var(--r-md);
+  color: var(--c-primary);
+  background: var(--c-primary-tint);
+}
+
+.as-card__icon svg {
+  inline-size: 22px;
+  block-size: 22px;
+}
+
+.as-card__title {
+  font-size: var(--fs-h4);
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: var(--lh-tight);
+  color: var(--c-ink);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.as-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-block-start: var(--sp-2);
+}
+
+/* Status pill. The exam list had no notion of one: a closed exam and a graded
+   exam rendered identical markup, and an exam the student had missed entirely
+   showed "undefined/12" with a link to an answer key they were not entitled to.
+   Every card now says what state it is in, in words. */
+.as-card__state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  align-self: flex-start;
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  border-radius: var(--r-pill);
+  color: var(--c-muted);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+}
+
+.as-card__state svg {
+  inline-size: 14px;
+  block-size: 14px;
+  flex: none;
+}
+
+.as-card__state--open {
+  color: var(--c-ok);
+  background: var(--c-ok-tint);
+  border-color: var(--c-ok);
+}
+
+.as-card__state--soon {
+  color: #7a4a05;
+  background: #fff6e5;
+  border-color: rgb(180 120 10 / 0.35);
+}
+
+.as-card__state--closed {
+  color: var(--c-bad);
+  background: var(--c-bad-tint);
+  border-color: var(--c-bad);
+}
+
+/* Score. Pushed to the bottom so cards with different title lengths still line
+   their scores up across a row. */
+.as-card__score {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin-block-start: auto;
+  padding-block-start: var(--sp-3);
+  border-block-start: 1px solid var(--c-line);
+}
+
+.as-card__score-value {
+  font-size: var(--fs-h3);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--c-ok);
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.as-card__score--low .as-card__score-value {
+  color: var(--c-bad);
+}
+
+.as-card__score-label {
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
+}
+
+.as-card__note {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
+}
+
+/* A date range is a Latin run inside an RTL line; without isolation the two
+   halves of "2026-08-05 → 2026-08-07" can swap. The markup also sets dir="ltr". */
+.as-card__when {
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.as-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-block-start: auto;
+}
+
+/* When a score is present it already provides the push-to-bottom, so the
+   actions row must not claim the free space a second time. */
+.as-card__score ~ .as-card__actions {
+  margin-block-start: 0;
+}
+
+/* .card carries a 3D tilt and a pointer spotlight built for a whole-card link.
+   An assessment card holds buttons instead, so it is a plain container: the
+   tilt is switched off rather than left to fight the buttons for the pointer. */
+.as-card,
+.as-card:hover {
+  --lift: 0px;
+  --tilt-lift: 0px;
+}
+
+.as-card::after {
+  display: none;
+}
+
+/* ------------------------------------------------------- reveal stagger ---
+   home.js adds .is-visible; home.css owns the transition. */
+.js .as-grid .reveal:nth-child(2) {
+  transition-delay: 60ms;
+}
+.js .as-grid .reveal:nth-child(3) {
+  transition-delay: 120ms;
+}
+.js .as-grid .reveal:nth-child(4) {
+  transition-delay: 180ms;
+}
+.js .as-grid .reveal:nth-child(n + 5) {
+  transition-delay: 240ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js .as-grid .reveal {
+    transition-delay: 0ms !important;
+  }
+}

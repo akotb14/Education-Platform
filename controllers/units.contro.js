@@ -11,19 +11,29 @@ const getData = async (req, res) => {
     let edu = req.params.edu;
     let student = "";
     let grd = req.params.grd;
-    console.log(edu + grd);
 
     if (req.cookies.student) {
       student = jwt.verify(req.cookies.student, process.env.SecretPassword);
     }
     const findMonth = await month.find({ educetionlevel: edu, grade: grd });
-    const getmonthofuser = await user.findOne({_id:student.studentCard});
-    console.log(getmonthofuser)
+    const getmonthofuser = await user.findOne({ _id: student.studentCard });
+
+    /* getmonthofuser['month'] used to be read unconditionally. findOne returns
+       null whenever the account behind an otherwise-valid cookie is gone —
+       deleted from /student while the student still had a session — and the
+       property access then threw, so the catch below turned an ordinary
+       "no months yet" visit into a bare 404 with nothing on screen.
+       Falling back to [] lets the view render its empty state instead. */
+    const unlocked =
+      getmonthofuser && Array.isArray(getmonthofuser.month)
+        ? getmonthofuser.month
+        : [];
+
     res.render("month.ejs", {
       data: findMonth,
       edu: edu,
       grd: grd,
-      month: getmonthofuser['month'],
+      month: unlocked,
       student: student,
       name: req.cookies.student,
     });
@@ -34,54 +44,84 @@ const getData = async (req, res) => {
   }
 };
 
-const addlesson = async (req, res) => {
+const addlesson = async (req, res, next) => {
   try {
-    let pdf = req.file? req.file.path : "";
-    await Unit.addlesson(
-      req.body.educetionlevel,
+    const educetionlevel = req.body.educetionlevel;
+    const grade = req.body.grade;
+    const monthName = req.body.month;
+    const unitName = (req.body.unit || "").trim();
 
-      req.body.grade,
-
-      req.body.month,
-
-      req.body.unit,
-
-      req.body.lesson,
-
-      pdf 
-    );
-    const checkMonth = await month.findOne({
-      educetionlevel: req.body.educetionlevel,
-      grade: req.body.grade,
-      month: req.body.month,
-    });
-    if (!checkMonth) {
-      const newMonth = new month({
-        educetionlevel: req.body.educetionlevel,
-        grade: req.body.grade,
-        month: req.body.month,
-      });
-      newMonth.save();
+    /* The form marks all four required, but a POST can arrive from anywhere.
+       Without this, Units.addlesson happily pushed a row with undefined fields
+       — an unnamed lesson in no month, which then appeared in every unit picker
+       as a blank option. */
+    if (!educetionlevel || !grade || !monthName || !unitName) {
+      req.flash("lessonBad", "اختر المادة والصف والشهر واكتب اسم الدرس.");
+      return res.redirect("/lesson");
     }
 
+    /* A duplicate name inside the same month makes the two rows
+       indistinguishable in the unit picker. */
+    const existing = await Unit.getModel().findOne({
+      educetionlevel: educetionlevel,
+      grade: grade,
+      units: { $elemMatch: { unit: unitName, month: monthName } },
+    });
+    if (existing) {
+      req.flash("lessonBad", `يوجد درس باسم «${unitName}» في هذا الشهر بالفعل.`);
+      return res.redirect("/lesson");
+    }
+
+    let pdf = req.file ? req.file.path : "";
+    await Unit.addlesson(
+      educetionlevel,
+      grade,
+      monthName,
+      unitName,
+      req.body.lesson,
+      pdf
+    );
+
+    const checkMonth = await month.findOne({
+      educetionlevel: educetionlevel,
+      grade: grade,
+      month: monthName,
+    });
+    if (!checkMonth) {
+      /* Was `newMonth.save()` with no await — the redirect could be sent, and
+         the process could in principle exit, before the write landed. */
+      await new month({
+        educetionlevel: educetionlevel,
+        grade: grade,
+        month: monthName,
+      }).save();
+    }
+
+    req.flash("lessonOk", `تمت إضافة درس «${unitName}».`);
     res.redirect("/lesson");
   } catch (err) {
-    console.log(err)
-    res.sendStatus(400);
+    /* Was `console.log(err); res.sendStatus(400)` — a server-side failure
+       reported to the admin as a bare 400 with no body. */
+    next(err);
   }
 };
 
-const getlesson = async (req, res) => {
+const getlesson = async (req, res, next) => {
   try {
     const lesson = await Unit.getModel().find({});
 
+    const okFlash = req.flash("lessonOk");
+    const badFlash = req.flash("lessonBad");
+
     res.render("admin/lesson.ejs", {
       lesson: lesson,
+      /* The per-row delete is a POST form now, so the page needs a token. */
+      csrfToken: req.csrfToken ? req.csrfToken() : "",
+      flashOk: okFlash.length ? okFlash[0] : "",
+      flashBad: badFlash.length ? badFlash[0] : "",
     });
   } catch (err) {
-    console.log(err);
-
-    res.sendStatus(404);
+    next(err);
   }
 };
 

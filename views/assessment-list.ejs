@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#fe3f40" />
+
+    <%
+      /* =====================================================================
+         SHARED ASSESSMENT LIST — replaces views/openExam.ejs,
+         views/showQuizEg.ejs and views/openHomework.ejs.
+
+         Those three files were the same page written three times: identical
+         Bootstrap `.row.g-5` of `.service-item` cards, identical footer,
+         identical right-click block, identical 600 KB of jQuery + Bootstrap +
+         owl-carousel + imagesloaded — differing only in which collection they
+         looped over and how badly they got the matching wrong.
+
+         WHAT EACH COPY GOT WRONG (all reproduced before rewriting):
+
+         openExam.ejs
+           · `k = degree.find(...) || ""` then `k.totalDegree` — on a miss `k`
+             is the empty string, so this printed "undefined/12" for every exam
+             the student had never sat.
+           · The closed-exam branch linked every student to /showAnswer for an
+             exam they may never have attempted. The gate added to
+             showAnswer.router.js now refuses that, but the LINK was still
+             offered — an invitation to a 403.
+           · An exam whose window had not opened yet matched neither branch, so
+             it rendered nothing at all: no card, no "opens on" date, no
+             explanation. Students could not tell a missing exam from a future
+             one.
+           · The open branch computed `che` and compared `i._id == che` to hide
+             the start link once attempted, but the isCheck=='1' arm was an
+             EMPTY block — so a student mid-attempt saw no way back in.
+
+         showQuizEg.ejs
+           · Looped over `degree` (the student's ATTEMPTS), so a quiz was
+             invisible until attempted. `quizzes` was passed by the route and
+             never used — the data needed to fix it was already there.
+           · Three levels of null guard (`i != null`, `i.quiz != null`) to work
+             around populate() returning null for a deleted paper, and still
+             read `i.quiz.quiz.length` unguarded.
+
+         openHomework.ejs
+           · Emitted cards from inside nested .find() callbacks; the outer
+             callback returned nothing so .find() never stopped and produced a
+             duplicate card per matching degree.
+           · Guarded on `loy` (a unit with SOME homework) but dereferenced
+             `lo['homeId']` (the unit matching the QUIZ) — "Cannot read
+             properties of undefined (reading 'nameQuiz')", a hard 500 since
+             render errors bypass the route's catch.
+           · Matched on `val.quizId`, so homework only appeared once the student
+             had attempted the unrelated quiz sitting in the same unit.
+
+         All three now render from one `items` array built server-side.
+
+         LOCALS
+           kind      "exam" | "quiz" | "homework"   (whitelisted below)
+           items     array of:
+                       id        String   paper _id
+                       name      String   paper title
+                       month     String   optional chip
+                       unit      String   optional badge
+                       subject   String   optional chip
+                       total     Number   question count
+                       state     "open" | "soon" | "closed" | "untimed"
+                       started   Boolean  an attempt row exists
+                       submitted Boolean  totalDegree is set
+                       score     Number|null
+                       opensAt   String|null  display only
+                       closesAt  String|null  display only
+
+         Every local is read behind a typeof guard, so a caller that omits one
+         gets a sane default rather than an EJS ReferenceError — that is what
+         lets three routes share this file. */
+
+      var kindRaw = typeof kind !== "undefined" && kind ? String(kind) : "quiz";
+
+      var KINDS = {
+        exam: {
+          title: "الامتحانات",
+          crumb: "الامتحانات",
+          a: "الامتحان",
+          start: "ابدأ الامتحان",
+          resume: "استكمال الامتحان",
+          emptyTitle: "لا توجد امتحانات متاحة",
+          emptyText: "لم يتم إضافة امتحانات لصفك بعد.",
+          startPath: "/startQuiz/"
+        },
+        quiz: {
+          title: "الكويزات",
+          crumb: "الكويزات",
+          a: "الكويز",
+          start: "ابدأ الكويز",
+          resume: "استكمال الكويز",
+          emptyTitle: "لا توجد كويزات متاحة",
+          emptyText: "لم يتم إضافة كويزات لصفك بعد، أو لم تُفتح لك أي شهور.",
+          startPath: "/quiz/"
+        },
+        homework: {
+          title: "الواجبات",
+          crumb: "الواجبات",
+          a: "الواجب",
+          start: "ابدأ حل الواجب",
+          resume: "استكمال الحل",
+          emptyTitle: "لا توجد واجبات متاحة",
+          emptyText: "لم يتم إضافة واجبات لصفك بعد، أو لم تُفتح لك أي شهور.",
+          startPath: "/homework/"
+        }
+      };
+
+      /* Whitelisted through the map rather than interpolated: `kind` reaches a
+         URL below, and a route passing something unexpected must fall back
+         rather than emit a broken path. */
+      var K = KINDS[kindRaw] || KINDS.quiz;
+
+      var list = typeof items !== "undefined" && Array.isArray(items) ? items : [];
+    %>
+
+    <meta name="robots" content="noindex, nofollow" />
+    <title><%= K.title %> | منصة أ/ مرڤت عبدالرحمن</title>
+
+    <link rel="icon" type="image/png" href="/assets/images/logo.png" />
+
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="/assets/css/tokens.css" />
+    <link rel="stylesheet" href="/assets/css/home.css" />
+    <link rel="stylesheet" href="/assets/css/listing.css" />
+    <link rel="stylesheet" href="/assets/css/quiz.css" />
+
+    <script src="/assets/js/home.js" defer></script>
+  </head>
+
+  <body oncontextmenu="return false;">
+    <a class="sr-only" href="#main">تخطي إلى المحتوى</a>
+
+    <div class="scroll-progress" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="container site-header__inner">
+        <a class="site-logo" href="/">
+          <img
+            src="/assets/images/logo.png"
+            alt="منصة أ/ مرڤت عبدالرحمن"
+            width="960"
+            height="960"
+          />
+        </a>
+
+        <button
+          class="nav-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="site-nav"
+        >
+          <span class="sr-only">القائمة</span>
+          <span class="nav-toggle__bars" aria-hidden="true"></span>
+        </button>
+
+        <nav class="site-nav" id="site-nav" aria-label="التنقل الرئيسي">
+          <ul class="site-nav__list">
+            <li><a class="site-nav__link" href="/#courses">الصفوف</a></li>
+            <li><a class="site-nav__link" href="/#activities">الاختبارات</a></li>
+            <li><a class="site-nav__link" href="/#contact">تواصل</a></li>
+            <li>
+              <a
+                class="site-nav__link site-nav__link--cta"
+                href="/logout"
+                data-magnetic
+              >
+                تسجيل الخروج
+              </a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="page-hero">
+        <div class="container page-hero__inner">
+          <nav class="crumbs" aria-label="مسار التصفح">
+            <ol class="crumbs__list">
+              <li><a href="/">الرئيسية</a></li>
+              <li class="crumbs__sep" aria-hidden="true">/</li>
+              <li><span aria-current="page"><%= K.crumb %></span></li>
+            </ol>
+          </nav>
+
+          <h1 class="page-hero__title"><em><%= K.title %></em></h1>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="container">
+          <% if (!list.length) { %>
+          <div class="empty">
+            <span class="empty__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M5 3h11l4 4v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm2 6v2h10V9H7Zm0 4v2h10v-2H7Zm0 4v2h6v-2H7Z" />
+              </svg>
+            </span>
+            <h2 class="empty__title"><%= K.emptyTitle %></h2>
+            <p class="empty__text"><%= K.emptyText %></p>
+            <div class="empty__actions">
+              <a class="btn btn--primary" href="/" data-magnetic>
+                العودة للرئيسية
+              </a>
+            </div>
+          </div>
+
+          <% } else { %>
+          <ul class="as-grid">
+            <% for (var c = 0; c < list.length; c++) { var card = list[c]; %>
+            <li class="card as-card reveal">
+              <div class="as-card__top">
+                <span class="as-card__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M5 3h11l4 4v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm2 6v2h10V9H7Zm0 4v2h10v-2H7Zm0 4v2h6v-2H7Z" />
+                  </svg>
+                </span>
+                <div>
+                  <h3 class="as-card__title"><%= card.name %></h3>
+                  <div class="as-card__meta">
+                    <% if (card.subject) { %>
+                    <span class="chip">
+                      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12 2l5 2v7c0 5.5-3.8 10.7-9 12-5.2-1.3-9-6.5-9-12V4l5-2 4 8 4-8Z" />
+                      </svg>
+                      <%= card.subject %>
+                    </span>
+                    <% } %>
+                    <% if (card.month) { %>
+                    <span class="chip chip--primary">
+                      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M7 2v2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2H7ZM5 9h14v10H5V9Z" />
+                      </svg>
+                      <%= card.month %>
+                    </span>
+                    <% } %>
+                    <% if (card.unit) { %>
+                    <span class="badge"><%= card.unit %></span>
+                    <% } %>
+                  </div>
+                </div>
+              </div>
+
+              <% /* STATE PILL — exam list shows the window, quiz/homework don't */ %>
+              <% if (card.state === "open") { %>
+              <span class="as-card__state as-card__state--open">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                </svg>
+                مفتوح الآن
+              </span>
+              <% } else if (card.state === "soon") { %>
+              <span class="as-card__state as-card__state--soon">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2Zm0 18c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8Zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7Z" />
+                </svg>
+                قريبًا
+              </span>
+              <% } else if (card.state === "closed") { %>
+              <span class="as-card__state as-card__state--closed">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2Zm5 13.6L15.6 17 12 13.4 8.4 17 7 15.6l3.6-3.6L7 8.4 8.4 7l3.6 3.6L15.6 7 17 8.4 13.4 12l3.6 3.6Z" />
+                </svg>
+                مغلق
+              </span>
+              <% } %>
+
+              <% if ((card.opensAt || card.closesAt) && kindRaw === "exam") { %>
+              <p class="as-card__note">
+                <% if (card.opensAt && card.state === "soon") { %>
+                يبدأ: <span class="as-card__when" dir="ltr"><%= card.opensAt %></span>
+                <% } else if (card.closesAt && card.state === "open") { %>
+                ينتهي: <span class="as-card__when" dir="ltr"><%= card.closesAt %></span>
+                <% } %>
+              </p>
+              <% } %>
+
+              <% if (card.submitted) { %>
+              <!-- Graded. Show the score and a link to the key. -->
+              <div class="as-card__score<%= card.score != null && card.total > 0 && card.score / card.total < 0.5 ? " as-card__score--low" : "" %>">
+                <span class="as-card__score-value" dir="ltr">
+                  <% if (card.score != null) { %><%= card.score %><% } else { %>—<% } %>
+                </span>
+                <span class="as-card__score-label">
+                  من <span class="num" dir="ltr"><%= card.total %></span>
+                </span>
+              </div>
+
+              <div class="as-card__actions">
+                <a
+                  class="btn btn--primary"
+                  href="/showAnswer/<%= encodeURIComponent(card.id) %>"
+                  data-magnetic
+                >
+                  نموذج الإجابة
+                </a>
+              </div>
+
+              <% } else if (card.state === "open" || card.state === "untimed") { %>
+              <!-- Open window (exam) or untimed (quiz/homework). Offer start or resume. -->
+              <% if (!card.started) { %>
+              <p class="as-card__note">
+                <span class="num"><%= card.total %></span> سؤال
+              </p>
+              <% } else { %>
+              <p class="as-card__note">بدأت في حل <%= K.a %></p>
+              <% } %>
+
+              <div class="as-card__actions">
+                <a
+                  class="btn btn--primary"
+                  href="<%= K.startPath %><%= encodeURIComponent(card.id) %>"
+                  data-magnetic
+                >
+                  <%= card.started ? K.resume : K.start %>
+                </a>
+              </div>
+
+              <% } else if (card.state === "soon") { %>
+              <!-- Future exam, no action available yet. -->
+              <p class="as-card__note">لم يبدأ بعد</p>
+
+              <% } else if (card.state === "closed") { %>
+              <!-- Closed exam the student never sat — no score, no link. The old
+                   page offered /showAnswer to everyone; the gate refuses it. -->
+              <p class="as-card__note">انتهى <%= K.a %></p>
+              <% } %>
+            </li>
+            <% } %>
+          </ul>
+          <% } %>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>
+          © <span class="num">2026</span> جميع الحقوق محفوظة — منصة أ/ مرڤت
+          عبدالرحمن.
+        </p>
+      </div>
+    </footer>
+
+    <button class="to-top" type="button" data-to-top>
+      <span class="sr-only">العودة إلى أعلى الصفحة</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+        <path
+          d="M12 19V5m0 0-6 6m6-6 6 6"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </button>
+
+    <script>
+      document.onkeydown = function (e) {
+        if (e.keyCode == 123) {
+          return false;
+        }
+        if (e.ctrlKey && e.shiftKey && e.keyCode == "I".charCodeAt(0)) {
+          return false;
+        }
+        if (e.ctrlKey && e.shiftKey && e.keyCode == "J".charCodeAt(0)) {
+          return false;
+        }
+        if (e.ctrlKey && e.keyCode == "U".charCodeAt(0)) {
+          return false;
+        }
+      };
+    </script>
+  </body>
+</html>

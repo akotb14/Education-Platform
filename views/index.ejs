@@ -1,541 +1,873 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
   <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="منصة أ/ مرڤت عبدالرحمن لشرح منهج الأحياء والجيولوجيا للثانوية العامة — كورسات وفيديوهات واختبارات وواجبات."
+    />
+    <meta name="theme-color" content="#fe3f40" />
+    <title>كوين الاحياء والچيولوچيا | منصة أ/ مرڤت عبدالرحمن</title>
+
     <link rel="icon" type="image/png" href="/assets/images/logo.png" />
 
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, shrink-to-fit=no"
-    />
-    <meta name="description" content="" />
-    <meta name="author" content="" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" />
+    <!-- Set before the stylesheets so .reveal elements never flash visible.
+         CSS keeps content visible unless this class is present, so a JS
+         failure leaves a readable page rather than a blank one. -->
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Poppins:wght@100;200;300;400;500;600;700;800;900&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap"
       rel="stylesheet"
     />
 
-    <title>كوين الاحياء والچيولوچيا</title>
+    <link rel="stylesheet" href="/assets/css/tokens.css" />
+    <link rel="stylesheet" href="/assets/css/home.css" />
 
-    <!-- Bootstrap core CSS -->
-    <link href="vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet" />
-
-    <!-- Additional CSS Files -->
-    <link rel="stylesheet" href="assets/css/fontawesome.css" />
-    <link rel="stylesheet" href="assets/css/templatemo-space-dynamic.css" />
-    <link rel="stylesheet" href="assets/css/animated.css" />
-    <link rel="stylesheet" href="assets/css/owl.css" />
+    <script src="/assets/js/home.js" defer></script>
   </head>
 
   <body oncontextmenu="return false;">
-    <!-- ***** Preloader Start ***** -->
-    <div id="js-preloader" class="js-preloader">
-      <div class="preloader-inner">
-        <span class="dot"></span>
-        <div class="dots">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-      </div>
-    </div>
-    <!-- ***** Preloader End ***** -->
+    <a class="sr-only" href="#main">تخطي إلى المحتوى</a>
 
-    <!-- ***** Header Area Start ***** -->
-    <header
-      class="header-area header-sticky wow slideInDown"
-      data-wow-duration="0.75s"
-      data-wow-delay="0s"
-    >
-      <div class="container">
-        <div class="row">
-          <div class="col-12">
-            <nav class="main-nav">
-              <!-- ***** Logo Start ***** -->
-              <div class="logo">
-                <a href="/">
-                  <img src="/assets/images/logo.png" alt="" />
-                </a>
-              </div>
-              <!-- ***** Logo End ***** -->
-              <!-- ***** Menu Start ***** -->
-              <ul class="nav">
-                <% if(!name){%>
+    <!-- Reading-progress bar. Decorative: it duplicates the scrollbar, so it
+         is hidden from assistive tech rather than given a progressbar role. -->
+    <div class="scroll-progress" aria-hidden="true"></div>
 
-                <li class="scroll-to-section">
-                  <a href="/login">تسجيل الدخول</a>
-                </li>
-                <%}else{ %> <% if(isAdmin == "true"){%>
-                <li>
-                  <a href="/dashboard" class="active" style="padding: 0 5px"
-                    >dashboard</a
-                  >
-                </li>
-                <% } %>
-                <li>
-                  <a>Hi <%=name.split(" ")[0] %> </a>
-                </li>
+    <header class="site-header">
+      <div class="container site-header__inner">
+        <a class="site-logo" href="/">
+          <img src="/assets/images/logo.png" alt="منصة أ/ مرڤت عبدالرحمن"
+            width="960"
+            height="960"
+          />
+        </a>
 
-                <li>
-                  <a href="/logout" class="active" style="padding: 0 5px"
-                    >Log Out</a
-                  >
-                </li>
-                <% } %>
+        <button
+          class="nav-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="site-nav"
+        >
+          <span class="sr-only">القائمة</span>
+          <span class="nav-toggle__bars" aria-hidden="true"></span>
+        </button>
 
-                <li class="scroll-to-section">
-                  <div class="main-red-button"></div>
-                </li>
-              </ul>
-              <a class="menu-trigger">
-                <span>Menu</span>
+        <nav class="site-nav" id="site-nav" aria-label="التنقل الرئيسي">
+          <ul class="site-nav__list">
+            <!-- Same-page links only. home.js marks the one in view with
+                 aria-current; it never touches /login or /logout, which is
+                 what the old theme's scrollspy choked on. -->
+            <li><a class="site-nav__link" href="#courses">الصفوف</a></li>
+            <li><a class="site-nav__link" href="#activities">الاختبارات</a></li>
+            <li><a class="site-nav__link" href="#faq">أسئلة شائعة</a></li>
+            <li><a class="site-nav__link" href="#contact">تواصل</a></li>
+
+            <% if (!name) { %>
+            <li>
+              <a
+                class="site-nav__link site-nav__link--cta"
+                href="/login"
+                data-magnetic
+              >
+                تسجيل الدخول
               </a>
-              <!-- ***** Menu End ***** -->
-            </nav>
-          </div>
-        </div>
+            </li>
+            <% } else { %> <% if (isAdmin == "true") { %>
+            <li>
+              <a class="site-nav__link" href="/dashboard">لوحة التحكم</a>
+            </li>
+            <% } %>
+            <li>
+              <span class="site-nav__user">أهلاً <%= name.split(" ")[0] %></span>
+            </li>
+            <li>
+              <a
+                class="site-nav__link site-nav__link--cta"
+                href="/logout"
+                data-magnetic
+              >
+                تسجيل الخروج
+              </a>
+            </li>
+            <% } %>
+          </ul>
+        </nav>
       </div>
     </header>
-    <!-- ***** Header Area End ***** -->
 
-    <div
-      class="main-banner wow fadeIn"
-      id="top"
-      data-wow-duration="1s"
-      data-wow-delay="0.5s"
-    >
-      <div class="container">
-        <div class="row">
-          <div class="col-lg-12">
-            <div class="row">
-              <div class="col-lg-6">
-                <div
-                  class="right-image wow fadeInRight"
-                  data-wow-duration="1s"
-                  data-wow-delay="0.5s"
-                >
-                  <img src="/assets/images/homeee.jpeg" alt="" />
-                </div>
+    <main id="main">
+      <!-- ============================================================ hero -->
+      <section class="hero grain">
+        <!-- Decorative depth layers. The canvas is painted by home.js and is
+             skipped entirely under prefers-reduced-motion. -->
+        <canvas class="hero__canvas" aria-hidden="true"></canvas>
+        <span
+          class="blob blob--1 parallax"
+          data-speed="0.10"
+          aria-hidden="true"
+        ></span>
+        <span
+          class="blob blob--2 parallax"
+          data-speed="0.16"
+          aria-hidden="true"
+        ></span>
+
+        <div class="container">
+          <!-- data-tilt sits on the grid, not the video: the Streamable iframe
+               swallows pointer events, so a listener on the frame itself would
+               only ever fire on its 1px edge. Custom properties inherit, so
+               --rx/--ry set here still reach .hero__video. -->
+          <div class="hero__grid" data-tilt>
+            <div class="reveal">
+              <p class="hero__eyebrow">منصة أ/ مرڤت عبدالرحمن</p>
+              <h1 class="hero__title">
+                لشرح منهج <em class="grad-text">الاحياء</em>
+                و<span>الجيولوجيا</span>
+              </h1>
+              <p class="hero__text">
+                كوين الأحياء والجيولوجيا — خبرة أكثر من ٣٠ عامًا في الثانوية
+                العامة.
+              </p>
+              <% if (!name) { %>
+              <div class="hero__actions">
+                <a class="btn btn--primary" href="/login" data-magnetic>
+                  سجل معنا الآن
+                </a>
+                <a class="btn btn--ghost" href="#courses" data-magnetic>
+                  تصفح الصفوف
+                </a>
               </div>
-              <div class="col-lg-6 align-self-center">
-                <div
-                  class="left-content header-text wow fadeInLeft"
-                  data-wow-duration="1s"
-                  data-wow-delay="1s"
-                >
-                  <h6>منصة أ/ مرڤت عبدالرحمن</h6>
-                  <h2>لشرح منهج<em> الاحياء</em> و<span>الجيولوجيا</span></h2>
-                  <p>
-                    كوين الأحياء والجيولوجيا خبرة اكثر من ٣٠ عام في الثانوية
-                    العامة
-                    <br />
-                    <%if(!name){%>
-                    <a rel="nofollow" href="/login" target="_parent"
-                      >سجل معنا الان</a
-                    >
-                    <%} %>
-                  </p>
-                </div>
-                <div
-                  style="
-                    left: 0;
-                    width: 100%;
-                    height: 0;
-                    position: relative;
-                    padding-bottom: 56.6667%;
-                  "
-                >
-                  <iframe
-                    src="https://streamable.com/o/rfdpe8"
-                    style="
-                      top: 0;
-                      left: 0;
-                      width: 100%;
-                      height: 100%;
-                      position: absolute;
-                      border: 0;
-                    "
-                    allowfullscreen
-                    scrolling="no"
-                    allow="encrypted-media;"
-                  ></iframe>
-                </div>
+              <% } else { %>
+              <div class="hero__actions">
+                <a class="btn btn--primary" href="#courses" data-magnetic>
+                  ابدأ الدراسة
+                </a>
               </div>
+              <% } %>
+            </div>
+
+            <div class="hero__stage reveal reveal--depth">
+              <div class="hero__video">
+                <iframe
+                  src="https://streamable.com/o/rfdpe8"
+                  title="فيديو تعريفي بالمنصة"
+                  loading="lazy"
+                  allowfullscreen
+                  scrolling="no"
+                  allow="encrypted-media;"
+                ></iframe>
+              </div>
+
+              <!-- Siblings of the frame, not children: .hero__video is
+                   overflow: hidden and would clip them. -->
+              <span class="hero__chip hero__chip--a">شرح بالنظام الحديث</span>
+              <span class="hero__chip hero__chip--b">اختبارات دورية</span>
             </div>
           </div>
+
+          <!-- Every figure here is read off the page itself: 30+ years from the
+               hero copy, 4 courses and 3 assessment types from the sections
+               below. Nothing invented. -->
+          <div class="stats reveal-group">
+            <div class="stat reveal">
+              <p class="stat__num" data-count="30" data-suffix="+">30+</p>
+              <p class="stat__label">سنة خبرة في الثانوية العامة</p>
+            </div>
+            <div class="stat reveal">
+              <p class="stat__num" data-count="4">4</p>
+              <p class="stat__label">مناهج دراسية كاملة</p>
+            </div>
+            <div class="stat reveal">
+              <p class="stat__num" data-count="3">3</p>
+              <p class="stat__label">أنواع تقييم مستمر</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================= marquee -->
+      <!-- Every phrase here restates the features section below, so the whole
+           strip is decorative and hidden from assistive tech. That also avoids
+           reading the duplicated track twice. (aria-label alone would have
+           done nothing — it is ignored on a role-less div.) -->
+      <div class="marquee" aria-hidden="true">
+        <div class="marquee__track">
+          <ul class="marquee__list">
+            <li class="marquee__item">شرح تفصيلي للمنهج بالنظام الحديث</li>
+            <li class="marquee__item">اختبارات وشيتات دورية</li>
+            <li class="marquee__item">الربط الطولي والعرضي</li>
+            <li class="marquee__item">مراجعة كاملة كل شهر</li>
+            <li class="marquee__item">أسئلة على النظام الجديد</li>
+            <li class="marquee__item">متابعة نواتج التعلم</li>
+          </ul>
+          <ul class="marquee__list">
+            <li class="marquee__item">شرح تفصيلي للمنهج بالنظام الحديث</li>
+            <li class="marquee__item">اختبارات وشيتات دورية</li>
+            <li class="marquee__item">الربط الطولي والعرضي</li>
+            <li class="marquee__item">مراجعة كاملة كل شهر</li>
+            <li class="marquee__item">أسئلة على النظام الجديد</li>
+            <li class="marquee__item">متابعة نواتج التعلم</li>
+          </ul>
         </div>
       </div>
-    </div>
 
-    <div id="about" class="about-us section">
-      <div class="container">
-        <div class="row">
-          <div class="col-lg-4">
-            <div
-              class="left-image wow fadeIn"
-              data-wow-duration="1s"
-              data-wow-delay="0.2s"
-            >
-              <img src="/assets/images/admission.png" alt="person graphic" />
-            </div>
-          </div>
-          <div class="col-lg-8 align-self-center">
-            <div class="services">
-              <div class="row">
-                <div class="col-lg-6">
-                  <div
-                    class="item wow fadeIn"
-                    data-wow-duration="1s"
-                    data-wow-delay="0.5s"
-                  >
-                    <div class="icon">
-                      <img src="/assets/images/logo.png" alt="" />
-                    </div>
-                    <div class="right-text">
-                      <h4>#</h4>
-                      <p>
-                        اختبارات وشيتات دورية بأسئلة علي النظام الجديد تختبر
-                        الفهم ونواتج التعلم نقوم بوضعها بعناية
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div class="col-lg-6">
-                  <div
-                    class="item wow fadeIn"
-                    data-wow-duration="1s"
-                    data-wow-delay="0.7s"
-                  >
-                    <div class="icon">
-                      <img src="/assets/images/logo.png" alt="" />
-                    </div>
-                    <div class="right-text">
-                      <h4>#</h4>
-
-                      <p>
-                        تدريب الطلاب علي اسئلة الربط الطولي والعرضي الموجوده
-                        بالمنهج
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div class="col-lg-6">
-                  <div
-                    class="item wow fadeIn"
-                    data-wow-duration="1s"
-                    data-wow-delay="0.9s"
-                  >
-                    <div class="icon">
-                      <img src="/assets/images/logo.png" alt="" />
-                    </div>
-                    <div class="right-text">
-                      <h4>#</h4>
-
-                      <p>مراجعه كاملة كل شهر علي ما تم شرحه سابقا</p>
-                    </div>
-                  </div>
-                </div>
-                <div class="col-lg-6">
-                  <div
-                    class="item wow fadeIn"
-                    data-wow-duration="1s"
-                    data-wow-delay="1.1s"
-                  >
-                    <div class="icon">
-                      <img src="/assets/images/logo.png" alt="" />
-                    </div>
-                    <div class="right-text">
-                      <h4>#</h4>
-
-                      <p>شرح تفصيلي للمنهج بالنظام الحديث</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="portfolio" class="our-portfolio section">
-      <div class="container">
-        <div class="row">
-          <div class="col-lg-6 offset-lg-3">
-            <div
-              class="section-heading wow bounceIn"
-              data-wow-duration="1s"
-              data-wow-delay="0.2s"
-            >
-              <h2>
-                <em>الصفوف</em>
-                <span>الدراسيه</span>
-              </h2>
-            </div>
-          </div>
-        </div>
-        <div class="row">
-          <div class="col-lg-3 col-sm-6" style="padding-bottom: 10px">
-            <a href="/biology/1st">
-              <div
-                class="item wow bounceInUp"
-                data-wow-duration="1s"
-                data-wow-delay="0.3s"
-              >
-                <div class="hidden-content">
-                  <h4>منهج الاحياء</h4>
-                  <p>
-                    كورسات وفيديوهات شرح منهج الاحياء للصف الدراسي الاول الثانوي
-                  </p>
-                </div>
-                <div class="showed-content">
-                  <img src="/assets/images/mervatr.jpg" alt="" />
-                  <p>
-                    <font color="fe3f40">
-                      <b>
-                        كورسات وفيديوهات شرح منهج الاحياء للصف الاول الثانوى
-                      </b></font
-                    >
-                  </p>
-                </div>
-              </div>
-            </a>
-          </div>
-          <div class="col-lg-3 col-sm-6">
-            <a href="/biology/2nd">
-              <div
-                class="item wow bounceInUp"
-                data-wow-duration="1s"
-                data-wow-delay="0.4s"
-              >
-                <div class="hidden-content">
-                  <h4>منهج الاحياء</h4>
-                  <p>
-                    كورسات وفيديوهات شرح منهج الاحياء للصف الدراسي الثاني
-                    الثانوي
-                  </p>
-                </div>
-                <div class="showed-content">
-                  <img src="/assets/images/mervatr.jpg" alt="" />
-                  <p>
-                    <font color="fe3f40">
-                      <b>
-                        كورسات وفيديوهات شرح منهج الاحياء للصف الثاني الثانوي
-                      </b></font
-                    >
-                  </p>
-                </div>
-              </div>
-            </a>
+      <!-- ======================================================== features -->
+      <section class="section" id="about">
+        <div class="container features__layout">
+          <div class="features__art parallax reveal" data-speed="0.08">
+            <img src="/assets/images/admission.png" alt=""
+            width="589"
+            height="617"
+          />
           </div>
 
-          <div class="col-lg-3 col-sm-6">
-            <a href="/biology/3rd">
-              <div
-                class="item wow bounceInUp"
-                data-wow-duration="1s"
-                data-wow-delay="0.5s"
-              >
-                <div class="hidden-content">
-                  <h4>منهج الاحياء</h4>
-                  <p>
-                    كورسات وفيديوهات شرح منهج الاحياء للصف الدراسي الثالث
-                    الثانوي
-                  </p>
-                </div>
-                <div class="showed-content">
-                  <img src="/assets/images/mervatr.jpg" alt="" />
-                  <p>
-                    <font color="fe3f40">
-                      <b>
-                        كورسات وفيديوهات شرح منهج الاحياء للصف الثالث الثانوي
-                      </b></font
-                    >
-                  </p>
-                </div>
-              </div>
-            </a>
-          </div>
-          <div class="col-lg-3 col-sm-6">
-            <a href="/geology/3rd">
-              <div
-                class="item wow bounceInUp"
-                data-wow-duration="1s"
-                data-wow-delay="0.5s"
-              >
-                <div class="hidden-content">
-                  <h4>منهج الچيولوچيا</h4>
-                  <p>
-                    كورسات وفيديوهات شرح منهج الچيولوچيا للصف الدراسي الثالث
-                    الثانوي
-                  </p>
-                </div>
-                <div class="showed-content">
-                  <img src="/assets/images/mervatr.jpg" alt="" />
-                  <p>
-                    <font color="fe3f40">
-                      <b>
-                        كورسات وفيديوهات شرح منهج الچيولوچيا للصف الثالث الثانوي
-                      </b></font
-                    >
-                  </p>
-                </div>
-              </div>
-            </a>
-          </div>
-          <div class="col-lg-3 col-sm-6">
-            <a href="/showQuiz">
-              <div
-                class="item wow bounceInUp"
-                data-wow-duration="1s"
-                data-wow-delay="0.3s"
-              >
-                <div class="hidden-content">
-                  <h4>كويز الحصه</h4>
-                  <p>
-                    يتم حل الكويز قبل بدايه كل حصه جديده ويجب النجاح فيه للدخول
-                    للحصه
-                  </p>
-                </div>
-                <div class="showed-content">
-                  <img
-                    src="/assets/images/undraw_book_lover_re_rwjy.svg"
-                    class="icon"
-                    alt=""
+          <div class="features__grid reveal-group">
+            <article class="feature reveal reveal--depth">
+              <span class="feature__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path
+                    d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1Z"
+                    stroke-width="1.7"
                   />
-                  <p>
-                    <font color="fe3f40"> <b> كويز الحصة </b></font>
-                  </p>
-                </div>
-              </div>
-            </a>
-          </div>
-          <div class="col-lg-3 col-sm-6">
-            <a href="/openExam">
-              <div
-                class="item wow bounceInUp"
-                data-wow-duration="1s"
-                data-wow-delay="0.3s"
-              >
-                <div class="hidden-content">
-                  <h4>الامتحان</h4>
-                  <p>يتم حل الامتحان مره واحده فقط عند دخولك</p>
-                </div>
-                <div class="showed-content">
-                  <img
-                    src="/assets/images/undraw_exams_g-4-ow.svg"
-                    class="icon"
-                    alt=""
+                  <path
+                    d="M8 6H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2"
+                    stroke-width="1.7"
                   />
-                  <p>
-                    <font color="fe3f40"> <b> الامتحانات </b></font>
-                  </p>
-                </div>
-              </div>
-            </a>
-          </div>
-          <div class="col-lg-3 col-sm-6">
-            <a href="/openHomeWork">
-              <div
-                class="item wow bounceInUp"
-                data-wow-duration="1s"
-                data-wow-delay="0.3s"
-              >
-                <div class="hidden-content">
-                  <h4>الواجب</h4>
-                  <p>يتم حل الواجب قبل الحصه للدخول</p>
-                </div>
-                <div class="showed-content">
-                  <img
-                    <img
-                    src="/assets/images/undraw_education_f8ru.svg"
-                    class="icon"
-                    alt=""
+                  <path
+                    d="m9 13 2 2 4-4"
+                    stroke-width="1.9"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
                   />
-                  <p>
-                    <font color="fe3f40"> <b> الواجب </b></font>
-                  </p>
-                </div>
-              </div>
-            </a>
+                </svg>
+              </span>
+              <p class="feature__text">
+                اختبارات وشيتات دورية بأسئلة علي النظام الجديد تختبر الفهم
+                ونواتج التعلم نقوم بوضعها بعناية
+              </p>
+            </article>
+
+            <article class="feature reveal reveal--depth">
+              <span class="feature__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path
+                    d="M10.5 13.5a4 4 0 0 0 5.7 0l2.3-2.3a4 4 0 0 0-5.7-5.7l-1.2 1.2"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                  />
+                  <path
+                    d="M13.5 10.5a4 4 0 0 0-5.7 0l-2.3 2.3a4 4 0 0 0 5.7 5.7l1.2-1.2"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
+              <p class="feature__text">
+                تدريب الطلاب علي اسئلة الربط الطولي والعرضي الموجوده بالمنهج
+              </p>
+            </article>
+
+            <article class="feature reveal reveal--depth">
+              <span class="feature__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <rect
+                    x="4"
+                    y="5"
+                    width="16"
+                    height="15"
+                    rx="2"
+                    stroke-width="1.7"
+                  />
+                  <path
+                    d="M4 10h16M9 3v4M15 3v4"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                  />
+                  <path
+                    d="M14.5 15.5a2.5 2.5 0 1 1-.8-1.8m.8-1.2v2h-2"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+              <p class="feature__text">
+                مراجعه كاملة كل شهر علي ما تم شرحه سابقا
+              </p>
+            </article>
+
+            <article class="feature reveal reveal--depth">
+              <span class="feature__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path
+                    d="M12 7.5C10.5 6 8.5 5.5 5 5.5v12c3.5 0 5.5.5 7 2 1.5-1.5 3.5-2 7-2v-12c-3.5 0-5.5.5-7 2Z"
+                    stroke-width="1.7"
+                    stroke-linejoin="round"
+                  />
+                  <path d="M12 7.5v14" stroke-width="1.7" />
+                </svg>
+              </span>
+              <p class="feature__text">شرح تفصيلي للمنهج بالنظام الحديث</p>
+            </article>
           </div>
         </div>
-      </div>
-    </div>
+      </section>
 
-    <div id="contact" class="contact-us section">
-      <div class="container">
-        <div class="row">
-          <div
-            class="col-lg-6 align-self-center wow fadeInLeft"
-            data-wow-duration="0.5s"
-            data-wow-delay="0.25s"
-          >
-            <div class="section-heading">
-              <h2>للحجز عن طريق السنتر</h2>
-              <h2>
-                <p>
-                  GLC Academy-ABOD Academy<br />
-                  <br />
-                </p>
-              </h2>
-              <div class="phone-info">
-                <h4>
-                  من خارج السويس يرجى الحجز من خلال الارقام:
-                  <span
-                    ><i class="fa fa-phone"></i>
-                    <a href="#">01093172264📲01066038495 </a></span
-                  >
-                </h4>
-              </div>
-            </div>
-          </div>
-          <div
-            class="col-lg-6 wow fadeInRight"
-            data-wow-duration="0.5s"
-            data-wow-delay="0.25s"
-          >
-            <form id="" action="" method="post">
-              <div class="contact-dec">
-                <img src="/assets/images/students.png" alt="" />
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    </div>
+      <!-- ========================================================= courses -->
+      <section class="section section--alt grain" id="courses">
+        <span
+          class="blob blob--1 parallax"
+          data-speed="0.12"
+          aria-hidden="true"
+        ></span>
 
-    <footer>
-      <div class="container">
-        <div class="row">
-          <div
-            class="col-lg-12 wow fadeIn"
-            data-wow-duration="1s"
-            data-wow-delay="0.25s"
-          >
-            <p>
-              © Copyright 2022. All Rights Reserved.
-
-              <br />Developed By:
-              <a
-                rel="nofollow"
-                href="https://www.facebook.com/profile.php?id=100011225383830"
-                >Abdelrahman</a
-              >
-              &
-              <a rel="nofollow" href="https://www.facebook.com/ahmed11mahomed">
-                Kotb</a
-              >
+        <div class="container">
+          <div class="section__head reveal">
+            <span class="section__eyebrow">المناهج</span>
+            <h2 class="section__title"><em>الصفوف</em> <span>الدراسية</span></h2>
+            <p class="section__lede">
+              كورسات وفيديوهات شرح كاملة لكل صف دراسي.
             </p>
           </div>
+
+          <div class="card-grid card-grid--courses reveal-group">
+            <div class="card-stage reveal reveal--depth">
+              <a class="card" href="/biology/1st" data-tilt>
+                <div class="card__frame">
+                  <img
+                    class="card__media"
+                    src="/assets/images/mervatr.jpg"
+                    alt=""
+                    width="1177"
+                    height="1191"
+                  />
+                </div>
+                <div class="card__body">
+                  <h3 class="card__title">منهج الأحياء</h3>
+                  <p class="card__desc">
+                    كورسات وفيديوهات شرح منهج الأحياء للصف الأول الثانوي
+                  </p>
+                  <span class="card__cta">
+                    ابدأ الآن <span aria-hidden="true">←</span>
+                  </span>
+                </div>
+              </a>
+            </div>
+
+            <div class="card-stage reveal reveal--depth">
+              <a class="card" href="/biology/2nd" data-tilt>
+                <div class="card__frame">
+                  <img
+                    class="card__media"
+                    src="/assets/images/mervatr.jpg"
+                    alt=""
+                    width="1177"
+                    height="1191"
+                  />
+                </div>
+                <div class="card__body">
+                  <h3 class="card__title">منهج الأحياء</h3>
+                  <p class="card__desc">
+                    كورسات وفيديوهات شرح منهج الأحياء للصف الثاني الثانوي
+                  </p>
+                  <span class="card__cta">ابدأ الآن <span aria-hidden="true">←</span></span>
+                </div>
+              </a>
+            </div>
+
+            <div class="card-stage reveal reveal--depth">
+              <a class="card" href="/biology/3rd" data-tilt>
+                <div class="card__frame">
+                  <img
+                    class="card__media"
+                    src="/assets/images/mervatr.jpg"
+                    alt=""
+                    width="1177"
+                    height="1191"
+                  />
+                </div>
+                <div class="card__body">
+                  <h3 class="card__title">منهج الأحياء</h3>
+                  <p class="card__desc">
+                    كورسات وفيديوهات شرح منهج الأحياء للصف الثالث الثانوي
+                  </p>
+                  <span class="card__cta">ابدأ الآن <span aria-hidden="true">←</span></span>
+                </div>
+              </a>
+            </div>
+
+            <div class="card-stage reveal reveal--depth">
+              <a class="card" href="/geology/3rd" data-tilt>
+                <div class="card__frame">
+                  <img
+                    class="card__media"
+                    src="/assets/images/mervatr.jpg"
+                    alt=""
+                    width="1177"
+                    height="1191"
+                  />
+                </div>
+                <div class="card__body">
+                  <h3 class="card__title">منهج الچيولوچيا</h3>
+                  <p class="card__desc">
+                    كورسات وفيديوهات شرح منهج الچيولوچيا للصف الثالث الثانوي
+                  </p>
+                  <span class="card__cta">ابدأ الآن <span aria-hidden="true">←</span></span>
+                </div>
+              </a>
+            </div>
+          </div>
         </div>
+      </section>
+
+      <!-- ====================================================== activities -->
+      <section class="section" id="activities">
+        <div class="container">
+          <div class="section__head reveal">
+            <span class="section__eyebrow">المتابعة</span>
+            <h2 class="section__title">
+              <em>الاختبارات</em> <span>والواجبات</span>
+            </h2>
+            <p class="section__lede">
+              كويزات وامتحانات وواجبات دورية لمتابعة مستواك أولًا بأول.
+            </p>
+          </div>
+
+          <div class="card-grid card-grid--activities reveal-group">
+            <div class="card-stage reveal reveal--depth">
+              <a class="card" href="/showQuiz" data-tilt>
+                <div class="card__frame">
+                  <img
+                    class="card__media card__media--icon"
+                    src="/assets/images/undraw_book_lover_re_rwjy.svg"
+                    alt=""
+                    width="669"
+                    height="512"
+                  />
+                </div>
+                <div class="card__body">
+                  <h3 class="card__title">كويز الحصة</h3>
+                  <p class="card__desc">
+                    يتم حل الكويز قبل بداية كل حصة جديدة ويجب النجاح فيه للدخول
+                    للحصة
+                  </p>
+                  <span class="card__cta">ابدأ الكويز <span aria-hidden="true">←</span></span>
+                </div>
+              </a>
+            </div>
+
+            <div class="card-stage reveal reveal--depth">
+              <a class="card" href="/openExam" data-tilt>
+                <div class="card__frame">
+                  <img
+                    class="card__media card__media--icon"
+                    src="/assets/images/undraw_exams_g-4-ow.svg"
+                    alt=""
+                    width="983"
+                    height="803"
+                  />
+                </div>
+                <div class="card__body">
+                  <h3 class="card__title">الامتحانات</h3>
+                  <p class="card__desc">
+                    يتم حل الامتحان مرة واحدة فقط عند دخولك
+                  </p>
+                  <span class="card__cta">ابدأ الامتحان <span aria-hidden="true">←</span></span>
+                </div>
+              </a>
+            </div>
+
+            <div class="card-stage reveal reveal--depth">
+              <a class="card" href="/openHomeWork" data-tilt>
+                <div class="card__frame">
+                  <img
+                    class="card__media card__media--icon"
+                    src="/assets/images/undraw_education_f8ru.svg"
+                    alt=""
+                    width="744"
+                    height="539"
+                  />
+                </div>
+                <div class="card__body">
+                  <h3 class="card__title">الواجب</h3>
+                  <p class="card__desc">
+                    يتم حل الواجب قبل الحصة للدخول
+                  </p>
+                  <span class="card__cta">ابدأ الواجب <span aria-hidden="true">←</span></span>
+                </div>
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================== steps -->
+      <section class="section" id="how">
+        <div class="container">
+          <div class="section__head reveal">
+            <span class="section__eyebrow">البداية</span>
+            <h2 class="section__title"><em>كيف</em> <span>تبدأ؟</span></h2>
+            <p class="section__lede">
+              أربع خطوات من الحجز حتى أول امتحان.
+            </p>
+          </div>
+
+          <!-- The step numbers come from a CSS counter, so reordering these in
+               the markup renumbers them automatically. -->
+          <ol class="steps reveal-group">
+            <li class="step reveal reveal--depth">
+              <span class="step__badge" aria-hidden="true"></span>
+              <h3 class="step__title">احجز مكانك</h3>
+              <p class="step__text">
+                الحجز من خلال السنتر، أو بالاتصال على أرقام الحجز إن كنت من خارج
+                السويس.
+              </p>
+            </li>
+            <li class="step reveal reveal--depth">
+              <span class="step__badge" aria-hidden="true"></span>
+              <h3 class="step__title">سجل دخولك</h3>
+              <p class="step__text">
+                تستلم بيانات حسابك من السنتر، ثم تدخل بها إلى المنصة.
+              </p>
+            </li>
+            <li class="step reveal reveal--depth">
+              <span class="step__badge" aria-hidden="true"></span>
+              <h3 class="step__title">اختر صفك</h3>
+              <p class="step__text">
+                اختر منهجك وصفك الدراسي، وتابع الحصص والفيديوهات شهرًا بشهر.
+              </p>
+            </li>
+            <li class="step reveal reveal--depth">
+              <span class="step__badge" aria-hidden="true"></span>
+              <h3 class="step__title">اختبر نفسك</h3>
+              <p class="step__text">
+                كويز قبل كل حصة، وواجب بعدها، وامتحانات دورية لمتابعة مستواك.
+              </p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ============================================================= faq -->
+      <section class="section" id="faq">
+        <div class="container">
+          <div class="section__head reveal">
+            <span class="section__eyebrow">استفسارات</span>
+            <h2 class="section__title"><em>أسئلة</em> <span>شائعة</span></h2>
+            <p class="section__lede">
+              أكثر ما يسأل عنه الطلاب وأولياء الأمور.
+            </p>
+          </div>
+
+          <!-- Native details/summary: keyboard operable, findable by the
+               browser's in-page search, and readable with CSS or JS disabled.
+               No JS behind this at all. -->
+          <div class="faq reveal-group">
+            <details class="faq__item reveal">
+              <summary class="faq__q">
+                كيف أحصل على حساب على المنصة؟
+                <svg
+                  class="faq__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="m6 9 6 6 6-6"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </summary>
+              <p class="faq__a">
+                الحسابات تُنشأ من خلال السنتر بعد الحجز، ولا يوجد تسجيل ذاتي على
+                الموقع. بعد الحجز تستلم بياناتك وتدخل بها من صفحة تسجيل الدخول.
+              </p>
+            </details>
+
+            <details class="faq__item reveal">
+              <summary class="faq__q">
+                هل يمكنني حل الامتحان أكثر من مرة؟
+                <svg
+                  class="faq__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="m6 9 6 6 6-6"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </summary>
+              <p class="faq__a">
+                لا. الامتحان يُحل مرة واحدة فقط، وتُسجل درجتك من المحاولة الأولى،
+                لذلك يفضل ألا تبدأ إلا وأنت مستعد ولديك وقت كافٍ.
+              </p>
+            </details>
+
+            <details class="faq__item reveal">
+              <summary class="faq__q">
+                ما الفرق بين الكويز والواجب والامتحان؟
+                <svg
+                  class="faq__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="m6 9 6 6 6-6"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </summary>
+              <p class="faq__a">
+                الكويز يسبق الحصة الجديدة ولا بد من اجتيازه للدخول إليها، والواجب
+                يُحل قبل الحصة أيضًا، أما الامتحانات فدورية على ما تم شرحه.
+              </p>
+            </details>
+
+            <details class="faq__item reveal">
+              <summary class="faq__q">
+                هل أستطيع المذاكرة من الموبايل؟
+                <svg
+                  class="faq__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="m6 9 6 6 6-6"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </summary>
+              <p class="faq__a">
+                نعم. المنصة تعمل على الموبايل والتابلت والكمبيوتر من خلال المتصفح
+                مباشرة، بدون تطبيق ولا تحميل.
+              </p>
+            </details>
+
+            <details class="faq__item reveal">
+              <summary class="faq__q">
+                ما المناهج المتاحة حاليًا؟
+                <svg
+                  class="faq__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="m6 9 6 6 6-6"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </summary>
+              <p class="faq__a">
+                الأحياء للصفوف الأول والثاني والثالث الثانوي، والچيولوچيا للصف
+                الثالث الثانوي.
+              </p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================= contact -->
+      <section class="section section--alt grain" id="contact">
+        <span
+          class="blob blob--2 parallax"
+          data-speed="0.14"
+          aria-hidden="true"
+        ></span>
+
+        <div class="container">
+          <div class="contact__grid">
+            <div class="reveal">
+              <span class="section__eyebrow">تواصل معنا</span>
+              <h2 class="contact__title">للحجز عن طريق السنتر</h2>
+              <p class="section__lede">GLC Academy — ABOD Academy</p>
+
+              <p class="contact__note">
+                من خارج السويس يرجى الحجز من خلال الأرقام:
+              </p>
+
+              <!-- Each number is its own isolated LTR run. Two Latin digit
+                   runs sharing one RTL paragraph render in swapped visual
+                   order otherwise. -->
+              <div class="contact__phones">
+                <a class="phone" dir="ltr" href="tel:+201093172264" data-magnetic>
+                  <svg
+                    class="phone__icon"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.3 2.2Z"
+                    />
+                  </svg>
+                  <bdi>01093172264</bdi>
+                </a>
+
+                <a class="phone" dir="ltr" href="tel:+201066038495" data-magnetic>
+                  <svg
+                    class="phone__icon"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.3 2.2Z"
+                    />
+                  </svg>
+                  <bdi>01066038495</bdi>
+                </a>
+              </div>
+
+              <!-- wa.me, not the whatsapp:// scheme the other views use: the
+                   custom scheme only resolves if the app is installed and
+                   silently dead-ends on desktop. wa.me needs the country code,
+                   so the local 011… number is written as 2011…
+
+                   No YouTube link here — the one in login.ejs is href="#". -->
+              <div class="channels">
+                <a
+                  class="chan chan--wa"
+                  href="https://wa.me/201122839310"
+                  rel="noopener"
+                  target="_blank"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path
+                      d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.1 14.1c-.2.6-1.2 1.2-1.7 1.2-.5 0-1.1 0-3.1-.9s-3.3-3-3.4-3.2c-.2-.2-1-1.3-1-2.5s.6-1.8.8-2c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 1.8c0 .2.1.3 0 .5l-.4.5c-.2.2-.3.3-.1.6.3.4.7 1 1.2 1.5.6.5 1.1.7 1.4.8.2.1.4.1.5-.1l.7-.8c.2-.2.3-.2.6-.1l1.6.8c.3.1.4.2.4.4 0 .2 0 .8-.1 1Z"
+                    />
+                  </svg>
+                  واتساب
+                </a>
+
+                <a
+                  class="chan chan--fb"
+                  href="https://www.facebook.com/110791531658361"
+                  rel="noopener"
+                  target="_blank"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path
+                      d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.7-3.9 1.1 0 2.2.2 2.2.2v2.4h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7A10 10 0 0 0 22 12Z"
+                    />
+                  </svg>
+                  فيسبوك
+                </a>
+              </div>
+            </div>
+
+            <div class="contact__art parallax reveal" data-speed="0.09">
+              <img src="/assets/images/students.png" alt=""
+            width="421"
+            height="421"
+          />
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- ======================================================== cta band -->
+      <!-- The two branches differ: a visitor is pushed to log in, a signed-in
+           student is pushed back into the courses they already have. -->
+      <section class="cta-band grain">
+        <span
+          class="blob blob--1 parallax"
+          data-speed="0.10"
+          aria-hidden="true"
+        ></span>
+
+        <div class="container reveal">
+          <% if (!name) { %>
+          <h2 class="cta-band__title">جاهز تبدأ معانا؟</h2>
+          <p class="cta-band__text">
+            سجل دخولك بالبيانات التي استلمتها من السنتر، وابدأ أول حصة اليوم.
+          </p>
+          <div class="cta-band__actions">
+            <a class="btn btn--invert" href="/login" data-magnetic>
+              تسجيل الدخول
+            </a>
+            <a class="btn btn--outline" href="#contact" data-magnetic>
+              استفسر عن الحجز
+            </a>
+          </div>
+          <% } else { %>
+          <h2 class="cta-band__title">كمل من حيث ما وقفت</h2>
+          <p class="cta-band__text">
+            حصصك واختباراتك في انتظارك — اختر صفك وابدأ المذاكرة.
+          </p>
+          <div class="cta-band__actions">
+            <a class="btn btn--invert" href="#courses" data-magnetic>
+              اذهب إلى الصفوف
+            </a>
+            <a class="btn btn--outline" href="/showQuiz" data-magnetic>
+              كويز الحصة
+            </a>
+          </div>
+          <% } %>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>
+          © Copyright 2022. All Rights Reserved.
+          <br />
+          Developed By:
+          <a
+            rel="nofollow noopener"
+            href="https://www.facebook.com/profile.php?id=100011225383830"
+            >Abdelrahman</a
+          >
+          &amp;
+          <a rel="nofollow noopener" href="https://www.facebook.com/ahmed11mahomed"
+            >Kotb</a
+          >
+        </p>
       </div>
     </footer>
-    <!-- Scripts -->
+
+    <!-- Back to top. A real <button>, and it stays out of the tab order until
+         it is actually on screen (visibility: hidden until [data-show]). -->
+    <button class="to-top" type="button" data-to-top>
+      <span class="sr-only">العودة إلى أعلى الصفحة</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+        <path
+          d="M12 19V5m0 0-6 6m6-6 6 6"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </button>
+
     <script>
       document.onkeydown = function (e) {
-        if (event.keyCode == 123) {
+        if (e.keyCode == 123) {
           return false;
         }
         if (e.ctrlKey && e.shiftKey && e.keyCode == "I".charCodeAt(0)) {
@@ -549,11 +881,5 @@
         }
       };
     </script>
-    <script src="vendor/jquery/jquery.min.js"></script>
-    <script src="vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/js/owl-carousel.js"></script>
-    <script src="assets/js/animation.js"></script>
-    <script src="assets/js/imagesloaded.js"></script>
-    <script src="assets/js/templatemo-custom.js"></script>
   </body>
 </html>

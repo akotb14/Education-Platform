@@ -1,205 +1,155 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard</title>
-    <!-- ======= Styles ====== -->
-    <link rel="stylesheet" href="../admin/dashboard/assets/css/style.css" />
-  </head> 
+<%- include("_head", { active: "dashboard", title: "لوحة التحكم" }) %>
+<%
+/* =========================================================================
+   ADMIN DASHBOARD
 
-  <body>
-    <!-- =============== Navigation ================ -->
-    <div class="container">
-      <div class="navigation">
-        <ul>
-          <li>
-            <a href="#" class="nav">
-              <span class="icon">
-                <img src="/logo2.png" alt="" />
-              </span>
-              <span class="title">The Quen Platform</span>
-            </a>
-          </li>
+   WHAT THE OLD PAGE DID
+     · Titled its only table "Recent Orders" with a "View All" button pointing
+       at "#" — leftover copy from the CodingNepal admin template it was cut
+       from. There are no orders; it is a student list.
+     · Rendered EVERY student in the collection, unpaginated and unsorted, into
+       that "recent" table. With a real roster that is one <tr> per student on
+       the dashboard's first paint.
+     · Showed a single stat card (student count) beside four columns of student
+       data, so the page was 95% table.
+     · Wrapped the card-number cell in `class="status delivered"`, a green
+       shipping-status pill from the template. It coloured every card number
+       green for no reason.
+     · Had a hard-coded `<img src="/WhatsApp Image 2022-02-18 at 9.21.54 PM.jpeg">`
+       avatar in the topbar. That file lives at public/admin/…, and the src has
+       no /admin prefix, so it 404'd on every load — and the filename's spaces
+       were never encoded.
+     · Was `<html lang="en">` with English UI, in an otherwise Arabic platform.
 
-          <li>
-            <a href="/" class="nav">
-              <span class="icon">
-                <ion-icon name="home-outline"></ion-icon>
-              </span>
-              <span class="title">go to home</span>
-            </a>
-          </li>
-          <li>
-            <a href="/dashboard" class="nav">
-              <span class="icon">
-                <ion-icon name="home-outline"></ion-icon>
-              </span>
-              <span class="title">Dashboard</span>
-            </a>
-          </li>
-          <li>
-            <a href="/student" class="nav">
-              <span class="icon">
-                <ion-icon name="people-outline"></ion-icon>
-              </span>
-              <span class="title">Students</span>
-            </a>
-          </li>
-          <li>
-            <a href="/admin/studentOnline" class="nav">
-              <span class="icon">
-                <ion-icon name="people-outline"></ion-icon>
-              </span>
-              <span class="title">studentOnline</span>
-            </a>
-          </li>
-          <li>
-            <a href="/lesson" class="nav">
-              <span class="icon">
-                <ion-icon name="videocam-outline"></ion-icon>
-              </span>
-              <span class="title">Lessons</span>
-            </a>
-          </li>
-          <li>
-            <a href="/admin/homework" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">Homework</span>
-            </a>
-          </li>
-          <li>
-            <a href="/showStudentsDegree/homework" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">show Homework Degree</span>
-            </a>
-          </li>
+   LOCALS  (all guarded — see _head.ejs on why)
+     stats    { students, lessons, quizzes, exams, homework }  Numbers
+     students Array of the most recent N, each { fullName, grade,
+              educetionlevel, phoneNumber, cardNumber, _id }
+     total    Number  full roster size, for the "showing N of M" line
+   ====================================================================== */
 
-          <li>
-            <a href="/admin/quiz" class="nav">
-              <span class="icon">
-                <ion-icon name="clipboard-outline"></ion-icon>
-              </span>
-              <span class="title">Quiz</span>
+var s = typeof stats !== "undefined" && stats ? stats : {};
+var rows =
+  typeof students !== "undefined" && Array.isArray(students) ? students : [];
+var totalStudents =
+  typeof total !== "undefined" && total != null ? Number(total) : rows.length;
+
+var n = function (v) {
+  return typeof v === "number" && isFinite(v) ? v : 0;
+};
+
+/* Arabic labels for the stored education-level values. The DB holds English
+   keys ("biology" / "geology"); anything unrecognised falls through to the
+   raw value rather than rendering blank. */
+var SUBJECTS = { biology: "الأحياء", geology: "الجيولوجيا" };
+var GRADES = {
+  "1st": "الصف الأول",
+  "2nd": "الصف الثاني",
+  "3rd": "الصف الثالث"
+};
+
+var CARDS = [
+  { key: "students", label: "الطلاب",     href: "/student",            icon: "users" },
+  { key: "lessons",  label: "الدروس",     href: "/lesson",             icon: "video" },
+  { key: "homework", label: "الواجبات",   href: "/admin/homework",     icon: "paper" },
+  { key: "quizzes",  label: "الكويزات",   href: "/admin/quiz",         icon: "clipboard" },
+  { key: "exams",    label: "الامتحانات", href: "/admin/exam",         icon: "book" }
+];
+
+var ICON = {
+  users:
+    "M16 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 1a3 3 0 1 0-3-3 3 3 0 0 0 3 3Zm0 2c-2.7 0-6 1.3-6 4v3h8v-3a5 5 0 0 1 1.5-3.4A10 10 0 0 0 8 14Zm8 0c-3 0-8 1.5-8 4.5V21h16v-2.5c0-3-5-4.5-8-4.5Z",
+  video:
+    "M4 5h11a2 2 0 0 1 2 2v2.5l5-3v11l-5-3V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z",
+  paper:
+    "M5 3h11l4 4v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm2 6v2h10V9H7Zm0 4v2h10v-2H7Zm0 4v2h6v-2H7Z",
+  clipboard:
+    "M9 2h6a1 1 0 0 1 1 1v1h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V3a1 1 0 0 1 1-1Zm0 3v1h6V5H9Zm-2 6v2h10v-2H7Zm0 4v2h7v-2H7Z",
+  book: "M4 3h11a3 3 0 0 1 3 3v15H7a3 3 0 0 1-3-3V3Zm2 2v13a1 1 0 0 0 1 1h9V6a1 1 0 0 0-1-1H6Z"
+};
+%>
+
+<ul class="stats">
+  <% for (var c = 0; c < CARDS.length; c++) { var card = CARDS[c]; %>
+  <li>
+    <a class="stat reveal<%= c % 2 ? " stat--accent" : "" %>" href="<%= card.href %>">
+      <span class="stat__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="<%= ICON[card.icon] %>" />
+        </svg>
+      </span>
+      <span>
+        <span class="stat__value"><%= n(s[card.key]) %></span>
+        <span class="stat__label"><%= card.label %></span>
+      </span>
+    </a>
+  </li>
+  <% } %>
+</ul>
+
+<section class="panel">
+  <div class="panel__head">
+    <h2 class="panel__title">أحدث الطلاب</h2>
+    <a class="panel__link" href="/student">
+      عرض الكل
+      <span class="num" dir="ltr">(<%= n(totalStudents) %>)</span>
+    </a>
+  </div>
+
+  <% if (!rows.length) { %>
+  <div class="empty-state">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="<%= ICON.users %>" />
+    </svg>
+    <p class="empty-state__title">لا يوجد طلاب مسجلون بعد</p>
+    <p>أضف أول طالب من صفحة «إضافة طالب».</p>
+  </div>
+
+  <% } else { %>
+  <div class="table-scroll">
+    <table class="table">
+      <caption class="sr-only">
+        أحدث الطلاب المسجلين على المنصة
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">الاسم</th>
+          <th scope="col">الصف</th>
+          <th scope="col">المادة</th>
+          <th scope="col">رقم الهاتف</th>
+          <th scope="col">رقم الكارت</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (var r = 0; r < rows.length; r++) { var st = rows[r]; %>
+        <tr>
+          <td class="table__name"><%= st.fullName || "—" %></td>
+          <td>
+            <% if (st.grade) { %>
+            <span class="tag"><%= GRADES[st.grade] || st.grade %></span>
+            <% } else { %>—<% } %>
+          </td>
+          <td>
+            <%= st.educetionlevel ? (SUBJECTS[st.educetionlevel] || st.educetionlevel) : "—" %>
+          </td>
+          <td>
+            <% if (st.phoneNumber) { %>
+            <a class="table__tel" href="tel:<%= st.phoneNumber %>" dir="ltr">
+              <%= st.phoneNumber %>
             </a>
-          </li>
-          <li>
-            <a href="/showStudentsDegree/quiz" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">show Quiz Degree</span>
-            </a>
-          </li>
-          <li>
-            <a href="/admin/exam" class="nav">
-              <span class="icon">
-                <ion-icon name="book-outline"></ion-icon>
-              </span>
-              <span class="title">Exam</span>
-            </a>
-          </li>
-          <li>
-            <a href="/showStudentsDegree/exam" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">show Exam Degree</span>
-            </a>
-          </li>
-         
-          <li>
-            <a href="/sign" class="nav">
-              <button class="signout nav">
-                <span class="icon">
-                  <ion-icon name="log-in-outline"></ion-icon>
-                </span>
-                <span class="title">Add Student</span>
-              </button>
-            </a>
-          </li>
-          
-        </ul>
-      </div>
+            <% } else { %>—<% } %>
+          </td>
+          <td>
+            <% if (st.cardNumber) { %>
+            <span class="table__code" dir="ltr"><%= st.cardNumber %></span>
+            <% } else { %>—<% } %>
+          </td>
+        </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+  <% } %>
+</section>
 
-      <!-- ========================= Main ==================== -->
-      <div class="main">
-        <div class="topbar">
-          <div class="toggle">
-            <ion-icon name="menu-outline"></ion-icon>
-          </div>
-
-          <div class="user">
-            <img src="/WhatsApp Image 2022-02-18 at 9.21.54 PM.jpeg" alt="" />
-          </div>
-        </div>
-
-        <!-- ======================= Cards ================== -->
-        <div class="cardBox">
-          <div class="card">
-            <div>
-              <div class="numbers"><%=student.length%></div>
-              <div class="cardName">Student</div>
-            </div>
-
-            <div class="iconBx">
-              <ion-icon name="people-outline"></ion-icon>
-            </div>
-          </div>
-        </div>
-
-        <!-- ================ Order Details List ================= -->
-        <div class="details">
-          <div class="recentOrders">
-            <div class="cardHeader">
-              <h2>Recent Orders</h2>
-              <a href="#" class="btn">View All</a>
-            </div>
-
-            <table>
-              <thead>
-                <tr>
-                  <td>Name</td>
-                  <td>Grade&Specialization</td>
-                  <td>phoneNumber</td>
-                  <td>NumCard</td>
-                </tr>
-              </thead>
-
-              <tbody>
-                <% for(let i of student){%>
-                <tr>
-                  <td><%=i.fullName%></td>
-                  <td><%=i.grade%>& <%=i.educetionlevel%></td>
-                  <td><%=i.phoneNumber%></td>
-                  <td><span class="status delivered"><%=i.cardNumber%></span></td>
-                </tr>
-              <%}%>
-
-               
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- =========== Scripts =========  -->
-    <script src="../admin/dashboard/assets/js/main.js"></script>
-
-    <!-- ====== ionicons ======= -->
-    <script
-      type="module"
-      src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"
-    ></script>
-    <script
-      nomodule
-      src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"
-    ></script>
-  </body>
-</html>
+<%- include("_foot") %>

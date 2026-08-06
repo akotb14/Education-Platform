@@ -8,7 +8,7 @@ const helmet = require("helmet");
 const session = require("express-session");
 const flash = require("connect-flash");
 const bodyParser = require("body-parser");
-require("dotenv").config();
+const config = require("./config");
 const cors = require("cors");
 //import db
 const connectDatabase = require("./models/connect_db");
@@ -41,9 +41,32 @@ async function addAdmin(name, card, phone) {
 }
 
 addAdmin("admin1", 123456789101122, 123456789101122);
-const port = process.env.PORT || 3000;
- 
+const port = config.port;
+
 const date = new Date();
+
+// helmet was installed and imported but never mounted.
+// contentSecurityPolicy is disabled for now: the existing EJS views use inline
+// scripts/styles and CDN assets that a default CSP would block. Re-enable it
+// with an explicit policy once the React frontend replaces those views.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+// express-rate-limit was also imported but never mounted. Login is the
+// endpoint worth protecting: it is the credential-guessing target.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Too many login attempts. Please try again later.",
+});
+app.use(["/login", "/sign"], loginLimiter);
+
 app.use(cors({}));
 app.use(express.static("public"));
 app.use(express.static("documantion"));
@@ -56,7 +79,7 @@ app.use(express.json());
 app.set("template engine", "ejs");
 app.use(
   session({
-    secret: "ahmed14252",
+    secret: config.sessionSecret,
     saveUninitialized: true,
     resave: true,
   })

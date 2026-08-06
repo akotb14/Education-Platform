@@ -1,230 +1,541 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
   <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#fe3f40" />
+
+    <%
+      /* =====================================================================
+         Display vocabulary.
+
+         edu and grd come straight off the URL, so they are attacker-controlled.
+         They are never echoed — they are looked up in these maps and only the
+         mapped Arabic label reaches the page. An unknown value falls back to a
+         generic label instead of being reflected, which keeps the page free of
+         reflected-XSS surface even though EJS would already escape it.
+         The same whitelist is what makes it safe to build a URL out of the
+         student's own level/grade further down. */
+      var SUBJECTS = { biology: "الأحياء", geology: "الجيولوجيا" };
+      var GRADES = {
+        "1st": "الصف الأول الثانوي",
+        "2nd": "الصف الثاني الثانوي",
+        "3rd": "الصف الثالث الثانوي"
+      };
+
+      var subjectName = SUBJECTS[edu] || "المنهج";
+      var gradeName = GRADES[grd] || "";
+
+      /* The exact ten strings the admin form writes (views/admin/lesson.ejs).
+         Anything outside this list still renders — it just sorts last and
+         shows no number rather than being dropped. */
+      var ORDINALS = [
+        "الاول", "الثاني", "الثالث", "الرابع", "الخامس",
+        "السادس", "السابع", "الثامن", "التاسع", "العاشر"
+      ];
+      var TERM2 = "الترم الثاني";
+
+      function readMonth(raw) {
+        var s = String(raw == null ? "" : raw).trim();
+        var term = 1;
+        if (s.indexOf(TERM2) !== -1) {
+          term = 2;
+          s = s.replace(TERM2, "").trim();
+        }
+        var idx = ORDINALS.indexOf(s.replace("الشهر", "").trim());
+        return { term: term, idx: idx };
+      }
+
+      /* --------------------------------------------------------------------
+         The old template filtered inside three nested loops. Same predicates,
+         evaluated once each here so the markup below is plain iteration.
+
+         `data` is already queried by the edu/grd in the URL, so comparing the
+         SIGNED-IN student's own level and grade against each row is what stops
+         a first-year student reading /biology/3rd by editing the address bar.
+         That check is load-bearing — it is the only thing guarding this
+         listing — so it is preserved exactly, just hoisted. */
+      var rows = (typeof data !== "undefined" && data) ? data : [];
+      var owned = (typeof month !== "undefined" && Array.isArray(month)) ? month : [];
+
+      var items = [];
+      for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        if (!row) continue;
+        if (!student) continue;
+        if (student.educetionlevel != row.educetionlevel) continue;
+        if (student.grade != row.grade) continue;
+        var meta = readMonth(row.month);
+        items.push({
+          month: row.month,
+          educetionlevel: row.educetionlevel,
+          grade: row.grade,
+          term: meta.term,
+          idx: meta.idx,
+          /* The old condition was `month.includes(i.month) && month != undefined`
+             — the undefined guard ran AFTER the call that would have thrown on
+             it, so it never did anything. The controller now guarantees an
+             array, and this is the real check. */
+          open: owned.indexOf(row.month) !== -1
+        });
+      }
+
+      /* Mongo returns insertion order, which is arbitrary — months routinely
+         came out shuffled. Sort by term, then by position in ORDINALS, with
+         unrecognised names last (sort is stable, so they keep their order). */
+      items.sort(function (a, b) {
+        if (a.term !== b.term) return a.term - b.term;
+        var ai = a.idx < 0 ? 99 : a.idx;
+        var bi = b.idx < 0 ? 99 : b.idx;
+        return ai - bi;
+      });
+
+      var terms = [
+        { n: 1, title: "الترم الأول", list: items.filter(function (m) { return m.term === 1; }) },
+        { n: 2, title: "الترم الثاني", list: items.filter(function (m) { return m.term === 2; }) }
+      ].filter(function (t) { return t.list.length > 0; });
+
+      var openCount = items.filter(function (m) { return m.open; }).length;
+
+      /* Is this page actually the signed-in student's own grade? Both the
+         "wrong grade" notice and the "nothing published yet" empty state used
+         to render as the same completely blank section. */
+      var mine =
+        !!student &&
+        String(student.educetionlevel) === String(edu) &&
+        String(student.grade) === String(grd);
+
+      /* Safe to interpolate: both halves are confirmed present in the
+         whitelists above before the URL is built. */
+      var myHref =
+        student && SUBJECTS[student.educetionlevel] && GRADES[student.grade]
+          ? "/" + student.educetionlevel + "/" + student.grade
+          : "/";
+
+      var firstName =
+        student && student.nameStudent
+          ? String(student.nameStudent).split(" ")[0]
+          : "";
+      var isAdmin = student && student.admin == "true";
+    %>
+
+    <meta
+      name="description"
+      content="شهور منهج <%= subjectName %> المتاحة<%= gradeName ? " — " + gradeName : "" %> على منصة أ/ مرڤت عبدالرحمن."
+    />
+    <!-- Per-student content behind a login — keep it out of search results. -->
+    <meta name="robots" content="noindex, nofollow" />
+
+    <title>
+      شهور <%= subjectName %><%= gradeName ? " — " + gradeName : "" %> | منصة أ/
+      مرڤت عبدالرحمن
+    </title>
+
     <link rel="icon" type="image/png" href="/assets/images/logo.png" />
 
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, shrink-to-fit=no"
-    />
-    <meta name="description" content="" />
-    <meta name="author" content="" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" />
+    <!-- Set before the stylesheets so .reveal elements never flash visible.
+         CSS keeps content visible unless this class is present, so a JS
+         failure leaves a readable page rather than a blank one — the inverse
+         of the WOW.js behaviour this replaces. -->
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Poppins:wght@100;200;300;400;500;600;700;800;900&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap"
       rel="stylesheet"
     />
 
-    <title>كوين الاحياء والچيولوچيا</title>
+    <!-- home.css carries the header, footer, card, contact and reveal
+         components this page reuses; listing.css adds the page hero, tiles and
+         empty states shared with the units page. Every visitor reaches this
+         route from a homepage card, so both files are already cached. -->
+    <link rel="stylesheet" href="/assets/css/tokens.css" />
+    <link rel="stylesheet" href="/assets/css/home.css" />
+    <link rel="stylesheet" href="/assets/css/listing.css" />
 
-    <!-- Bootstrap core CSS -->
-    <link
-      href="../courses/vendor/bootstrap/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
-
-    <!-- Additional CSS Files -->
-    <link rel="stylesheet" href="../courses/assets/css/fontawesome.css" />
-    <link
-      rel="stylesheet"
-      href="../courses/assets/css/templatemo-space-dynamic.css"
-    />
-    <link rel="stylesheet" href="../courses/assets/css/animated.css" />
-    <link rel="stylesheet" href="../courses/assets/css/owl.css" />
-    <!--
-    
-TemplateMo 562 Space Dynamic
-
-
--->
+    <script src="/assets/js/home.js" defer></script>
   </head>
 
-  <body>
-    <!-- ***** Preloader Start ***** -->
-    <div id="js-preloader" class="js-preloader">
-      <div class="preloader-inner">
-        <span class="dot"></span>
-        <div class="dots">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-      </div>
-    </div>
-    <!-- ***** Preloader End ***** -->
+  <body oncontextmenu="return false;">
+    <a class="sr-only" href="#main">تخطي إلى المحتوى</a>
 
-    <!-- ***** Header Area Start ***** -->
-    <header
-      class="header-area header-sticky wow slideInDown"
-      data-wow-duration="0.75s"
-      data-wow-delay="0s"
-    >
-      <div class="container">
-        <div class="row">
-          <div class="col-12">
-            <nav class="main-nav">
-              <!-- ***** Logo Start ***** -->
-              <div class="logo">
-                <a href="/">
-                  <img src="/assets/images/logo.png" alt="" />
-                </a>
-              </div>
-              <!-- ***** Logo End ***** -->
-              <!-- ***** Menu Start ***** -->
-              <ul class="nav">
-                <li class="scroll-to-section">
-                  <div class="main-red-button"></div>
-                </li>
-              </ul>
-              <a class="menu-trigger">
-                <span>Menu</span>
+    <div class="scroll-progress" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="container site-header__inner">
+        <a class="site-logo" href="/">
+          <img
+            src="/assets/images/logo.png"
+            alt="منصة أ/ مرڤت عبدالرحمن"
+            width="960"
+            height="960"
+          />
+        </a>
+
+        <button
+          class="nav-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="site-nav"
+        >
+          <span class="sr-only">القائمة</span>
+          <span class="nav-toggle__bars" aria-hidden="true"></span>
+        </button>
+
+        <nav class="site-nav" id="site-nav" aria-label="التنقل الرئيسي">
+          <ul class="site-nav__list">
+            <!-- Root-relative, not bare "#courses": those sections live on the
+                 homepage, not here. home.js only wires up links whose href
+                 STARTS with "#", so these are left alone rather than being
+                 handed to the scrollspy. -->
+            <li><a class="site-nav__link" href="/#courses">الصفوف</a></li>
+            <li><a class="site-nav__link" href="/#activities">الاختبارات</a></li>
+            <li><a class="site-nav__link" href="/#contact">تواصل</a></li>
+
+            <% if (isAdmin) { %>
+            <li><a class="site-nav__link" href="/dashboard">لوحة التحكم</a></li>
+            <% } %> <% if (firstName) { %>
+            <li>
+              <span class="site-nav__user">أهلاً <%= firstName %></span>
+            </li>
+            <% } %>
+            <li>
+              <a
+                class="site-nav__link site-nav__link--cta"
+                href="/logout"
+                data-magnetic
+              >
+                تسجيل الخروج
               </a>
-              <!-- ***** Menu End ***** -->
-            </nav>
-          </div>
-        </div>
+            </li>
+          </ul>
+        </nav>
       </div>
     </header>
-    <!-- ***** Header Area End ***** -->
 
-    <div
-      class="main-banner wow fadeIn"
-      id="top"
-      data-wow-duration="1s"
-      data-wow-delay="0.5s"
-    >
-      <!-- Projects Start -->
+    <main id="main">
+      <!-- ======================================================= page hero -->
+      <section class="page-hero">
+        <div class="container page-hero__inner">
+          <nav class="crumbs" aria-label="مسار التصفح">
+            <ol class="crumbs__list">
+              <li><a href="/">الرئيسية</a></li>
+              <li class="crumbs__sep" aria-hidden="true">/</li>
+              <li>
+                <span aria-current="page">
+                  <%= subjectName %><%= gradeName ? " — " + gradeName : "" %>
+                </span>
+              </li>
+            </ol>
+          </nav>
 
-      <section class="blog section">
-        <div class="container">
-          <div class="section-header">
-            <h2 class="title" data-title="Ready for any thing">
-              <b> شهور المنهج المتاحه</b>
-            </h2>
-            <p class="text"></p>
-          </div>
+          <!-- The page had no h1 at all; the old heading was an <h2> whose
+               data-title read "Ready for any thing" in English. -->
+          <h1 class="page-hero__title">
+            شهور منهج <em><%= subjectName %></em>
+          </h1>
 
-          <div class="blog-wrapper">
-            <% for(i of data){%> 
-              <% if(month.includes(i.month) && month != undefined){%> 
-            <% if(student.educetionlevel ==
-            i.educetionlevel && student.grade == i.grade) {%>
-            <div class="blog-wrap">
-              <div class="blog-card">
-                <div
-                  class="service-item wow bounceInUp"
-                  data-wow-duration="1s"
-                  data-wow-delay="0.3s"
-                >
-                  <div class="blog-image">
-                    <img src="/assets/images/mervatr.jpg" alt="" />
-                  </div>
+          <p class="page-hero__lede">
+            <% if (mine && items.length) { %>
+            اختر الشهر الذي تريد مذاكرته للدخول إلى الدروس والفيديوهات
+            والاختبارات الخاصة به.
+            <% } else { %>
+            كل شهور المنهج تظهر هنا فور إتاحتها لك من قِبل السنتر.
+            <% } %>
+          </p>
 
-                  <div class="blog-content">
-                    <div class="blog-info">
-                      <h5 class="blog-date">2023</h5>
-                    </div>
-                    <h3 class="title-sm"><%=i.month%></h3>
-                    <p class="blog-text"></p>
-                    <% if(!name){%>
-                    <a href="/Log in mervat/index.html" class="btn small"
-                      >تسجيل الان</a
-                    >
-                    <%}else{%>
-                    <a
-                      href="/lessons/<%=i.educetionlevel%>/<%=i.grade%>/<%=i.month%>"
-                      class="btn small"
-                      >دخول</a
-                    >
-                    <%} %>
-                  </div>
-                </div>
-              </div>
-              </div>
-              <% } %>
-              <%}%>
-               <%} %>
+          <!-- edu/grd never printed raw — these are the mapped labels. -->
+          <div class="meta-row">
+            <% if (gradeName) { %>
+            <span class="chip">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 3 1 9l11 6 9-4.91V17h2V9L12 3ZM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82Z" />
+              </svg>
+              <%= gradeName %>
+            </span>
+            <% } %>
+
+            <% if (mine && items.length) { %>
+            <span class="chip chip--primary">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 2 15.09 8.26 22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z" />
+              </svg>
+              <span class="num"><%= openCount %></span> من
+              <span class="num"><%= items.length %></span> شهر متاح لك
+            </span>
+            <% } %>
           </div>
         </div>
       </section>
-    </div>
-    <!-- Projects End -->
 
-    <div id="contact" class="contact-us section">
-      <div class="container">
-        <div class="row">
-          <div
-            class="col-lg-6 align-self-center wow fadeInLeft"
-            data-wow-duration="0.5s"
-            data-wow-delay="0.25s"
-          >
-            <div class="section-heading">
-              <h2>للحجز عن طريق السنتر</h2>
-              <h2>
-                <p>
-                  GLC Academy-ABOD Academy<br />
-                  <br />
-                </p>
-              </h2>
-              <div class="phone-info">
-                <h4>
-                  من خارج السويس يرجى الحجز من خلال الارقام:
-                  <span
-                    ><i class="fa fa-phone"></i>
-                    <a href="#">01093172264📲01066038495 </a></span
-                  >
-                </h4>
-              </div>
-            </div>
-          </div>
-          <div
-            class="col-lg-6 wow fadeInRight"
-            data-wow-duration="0.5s"
-            data-wow-delay="0.25s"
-          >
-            <form id="" action="" method="post">
-              <div class="contact-dec">
-                <img src="/assets/images/students.png" alt="" />
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <footer>
-      <div class="container">
-        <div class="row">
-          <div
-            class="col-lg-12 wow fadeIn"
-            data-wow-duration="1s"
-            data-wow-delay="0.25s"
-          >
+      <!-- ========================================================== months -->
+      <section class="section">
+        <div class="container">
+          <% if (!mine) { %>
+          <!-- Reached by editing the URL to another level or grade. The old
+               page rendered an empty section with no explanation here. -->
+          <div class="notice">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z" />
+            </svg>
             <p>
-              © Copyright 2022. All Rights Reserved.
-
-              <br />Developed By:
-              <a
-                rel="nofollow"
-                href="https://www.facebook.com/profile.php?id=100011225383830"
-                >Abdelrahman</a
-              >
-              &
-              <a rel="nofollow" href="https://www.facebook.com/ahmed11mahomed">
-                Kotb</a
-              >
+              <strong>هذه الصفحة ليست للصف المسجَّل باسمك.</strong><br />
+              يمكنك الرجوع إلى
+              <a href="<%= myHref %>">صفحة الشهور الخاصة بك</a>
+              أو إلى <a href="/">الصفحة الرئيسية</a>. لو كان الصف المسجَّل غير
+              صحيح، تواصل مع السنتر لتعديله.
             </p>
           </div>
+
+          <% } else if (!items.length) { %>
+          <!-- No months published for this grade yet. -->
+          <div class="empty">
+            <span class="empty__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M4 4h6l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 6v8h16v-8H4Z" />
+              </svg>
+            </span>
+            <h2 class="empty__title">لا توجد شهور متاحة بعد</h2>
+            <p class="empty__text">
+              لم يتم رفع شهور هذا المنهج حتى الآن. تابع الصفحة الرئيسية أو تواصل
+              مع السنتر لمعرفة موعد الإتاحة.
+            </p>
+            <div class="empty__actions">
+              <a class="btn btn--primary" href="/" data-magnetic>
+                العودة للرئيسية
+              </a>
+              <a class="btn btn--outline" href="#contact" data-magnetic>
+                تواصل مع السنتر
+              </a>
+            </div>
+          </div>
+
+          <% } else { %> <% if (!openCount) { %>
+          <!-- Months exist but none are unlocked. Previously the single most
+               common blank-page case: the loop matched nothing and the student
+               saw a heading over empty space with no idea why. -->
+          <div class="notice">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z" />
+            </svg>
+            <p>
+              <strong>لم يتم تفعيل أي شهر لحسابك حتى الآن.</strong><br />
+              الشهور المعروضة بالأسفل هي محتوى المنهج كاملًا. للاشتراك في أي شهر
+              وفتحه على حسابك، تواصل مع السنتر على
+              <a href="#contact">أرقام الحجز</a>.
+            </p>
+          </div>
+          <% } %> <% for (var t = 0; t < terms.length; t++) { var term = terms[t]; %>
+          <div class="term">
+            <div class="term__head reveal">
+              <h2 class="term__title"><%= term.title %></h2>
+              <hr class="term__rule" />
+            </div>
+
+            <div class="tile-grid">
+              <% for (var k = 0; k < term.list.length; k++) { var m = term.list[k]; %>
+              <div class="card-stage reveal">
+                <% if (m.open) { %>
+                <!-- encodeURIComponent, not the bare value: month names are
+                     Arabic and contain spaces, so they have to be percent-
+                     encoded to survive the path. Express decodes :month back
+                     before isMonth compares it. -->
+                <a
+                  class="card tile"
+                  href="/lessons/<%= encodeURIComponent(m.educetionlevel) %>/<%= encodeURIComponent(m.grade) %>/<%= encodeURIComponent(m.month) %>"
+                  data-tilt
+                >
+                  <span class="tile__num" aria-hidden="true">
+                    <span><%= m.idx >= 0 ? m.idx + 1 : "•" %></span>
+                  </span>
+                  <div class="card__body">
+                    <h3 class="tile__title"><%= m.month %></h3>
+                    <p class="tile__hint">دروس وفيديوهات واختبارات الشهر</p>
+                    <span class="card__cta">
+                      ادخل الشهر <span aria-hidden="true">←</span>
+                    </span>
+                  </div>
+                </a>
+
+                <% } else { %>
+                <!-- Deliberately not an <a>. /lessons/... is guarded by
+                     isMonth, which answers a bare 404 for any month the
+                     student does not own, so a link here would be a link to a
+                     guaranteed dead end. No href means no tab stop either. -->
+                <div class="card tile tile--locked">
+                  <span class="tile__num" aria-hidden="true">
+                    <span><%= m.idx >= 0 ? m.idx + 1 : "•" %></span>
+                  </span>
+                  <div class="card__body">
+                    <h3 class="tile__title"><%= m.month %></h3>
+                    <p class="tile__hint">غير مفعَّل على حسابك</p>
+                    <span class="tile__lock">
+                      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12 1a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5Zm0 2a3 3 0 0 1 3 3v3H9V6a3 3 0 0 1 3-3Zm0 11a2 2 0 0 1 1 3.73V19h-2v-1.27A2 2 0 0 1 12 14Z" />
+                      </svg>
+                      للاشتراك تواصل مع السنتر
+                    </span>
+                  </div>
+                </div>
+                <% } %>
+              </div>
+              <% } %>
+            </div>
+          </div>
+          <% } %> <% } %>
         </div>
+      </section>
+
+      <!-- ========================================================= contact -->
+      <section class="section section--alt grain" id="contact">
+        <span
+          class="blob blob--2 parallax"
+          data-speed="0.14"
+          aria-hidden="true"
+        ></span>
+
+        <div class="container">
+          <div class="contact__grid">
+            <div class="reveal">
+              <span class="section__eyebrow">تواصل معنا</span>
+              <h2 class="contact__title">للحجز عن طريق السنتر</h2>
+              <p class="section__lede">GLC Academy — ABOD Academy</p>
+
+              <p class="contact__note">
+                من خارج السويس يرجى الحجز من خلال الأرقام:
+              </p>
+
+              <!-- The old markup was a single href="#" holding
+                   "01093172264📲01066038495". Two Latin digit runs separated by
+                   a neutral character inside an RTL paragraph swap visual
+                   order, so that line rendered the second number first — and
+                   neither one dialled. Each number is now its own isolated LTR
+                   tel: link. -->
+              <div class="contact__phones">
+                <a class="phone" dir="ltr" href="tel:+201093172264" data-magnetic>
+                  <svg
+                    class="phone__icon"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.3 2.2Z"
+                    />
+                  </svg>
+                  <bdi>01093172264</bdi>
+                </a>
+
+                <a class="phone" dir="ltr" href="tel:+201066038495" data-magnetic>
+                  <svg
+                    class="phone__icon"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.3 2.2Z"
+                    />
+                  </svg>
+                  <bdi>01066038495</bdi>
+                </a>
+              </div>
+
+              <div class="channels">
+                <a
+                  class="chan chan--wa"
+                  href="https://wa.me/201122839310"
+                  rel="noopener"
+                  target="_blank"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path
+                      d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.1 14.1c-.2.6-1.2 1.2-1.7 1.2-.5 0-1.1 0-3.1-.9s-3.3-3-3.4-3.2c-.2-.2-1-1.3-1-2.5s.6-1.8.8-2c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 1.8c0 .2.1.3 0 .5l-.4.5c-.2.2-.3.3-.1.6.3.4.7 1 1.2 1.5.6.5 1.1.7 1.4.8.2.1.4.1.5-.1l.7-.8c.2-.2.3-.2.6-.1l1.6.8c.3.1.4.2.4.4 0 .2 0 .8-.1 1Z"
+                    />
+                  </svg>
+                  واتساب
+                </a>
+
+                <a
+                  class="chan chan--fb"
+                  href="https://www.facebook.com/110791531658361"
+                  rel="noopener"
+                  target="_blank"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path
+                      d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.7-3.9 1.1 0 2.2.2 2.2.2v2.4h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7A10 10 0 0 0 22 12Z"
+                    />
+                  </svg>
+                  فيسبوك
+                </a>
+              </div>
+            </div>
+
+            <!-- The old markup wrapped this image in <form action="" method="post">
+                 with no inputs at all — an empty POST target around decoration. -->
+            <div class="contact__art parallax reveal" data-speed="0.09">
+              <img
+                src="/assets/images/students.png"
+                alt=""
+                width="421"
+                height="421"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>
+          © <span class="num">2026</span> جميع الحقوق محفوظة — منصة أ/ مرڤت
+          عبدالرحمن.
+          <br />Developed By:
+          <a
+            rel="nofollow noopener"
+            href="https://www.facebook.com/profile.php?id=100011225383830"
+            >Abdelrahman</a
+          >
+          &amp;
+          <a rel="nofollow noopener" href="https://www.facebook.com/ahmed11mahomed"
+            >Kotb</a
+          >
+        </p>
       </div>
     </footer>
-    <!-- Scripts -->
-    <script src="../../courses/vendor/jquery/jquery.min.js"></script>
-    <script src="../../courses/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-    <script src="../../courses/assets/js/owl-carousel.js"></script>
-    <script src="../../courses/assets/js/animation.js"></script>
-    <script src="../../courses/assets/js/imagesloaded.js"></script>
-    <script src="../../courses/assets/js/templatemo-custom.js"></script>
+
+    <button class="to-top" type="button" data-to-top>
+      <span class="sr-only">العودة إلى أعلى الصفحة</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+        <path
+          d="M12 19V5m0 0-6 6m6-6 6 6"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </button>
+
+    <script>
+      document.onkeydown = function (e) {
+        if (e.keyCode == 123) {
+          return false;
+        }
+        if (e.ctrlKey && e.shiftKey && e.keyCode == "I".charCodeAt(0)) {
+          return false;
+        }
+        if (e.ctrlKey && e.shiftKey && e.keyCode == "J".charCodeAt(0)) {
+          return false;
+        }
+        if (e.ctrlKey && e.keyCode == "U".charCodeAt(0)) {
+          return false;
+        }
+      };
+    </script>
   </body>
 </html>

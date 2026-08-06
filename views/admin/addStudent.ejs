@@ -1,0 +1,262 @@
+<%- include("_head", { active: "addstudent", title: "إضافة طالب" }) %>
+<%
+/* =========================================================================
+   ADD STUDENT — CREATE A PLATFORM ACCOUNT
+
+   WHAT THE OLD PAGE DID (sign.ejs, 283 lines)
+     · Was a 283-line TemplateMo dashboard theme with a copy-pasted 110-line
+       sidebar, `lang="en"`, no dir, and `title>Category`.
+     · Loaded `../admin/dashboard/assets/css/style.css` and
+       `../admin/signup/style.css` via relative URLs, both of which only
+       resolve because the page was served at the root `/sign` — if the route
+       had been `/admin/sign` both stylesheets would 404.
+     · Had an `isAdmin` select with `id="grade"` (a duplicate of the real
+       grade select's id) and `value="false" disabled selected hidden` — so
+       the placeholder hid the current value and re-submitted it on every save.
+     · Imported but never mounted the `valid` middleware: signup.router.js:3
+       `const valid = require(...)` but the POST route at L36 is
+       `router.post("/sign", csrfProtect, isAdmin, contro.postInfo)` — `valid`
+       never appears. So the form has zero server-side validation today.
+     · The validator schema at util/validSignup.js requires `confirmPassword`
+       but the form has no such field, so mounting `valid` as-is would reject
+       every submission as missing a required key.
+     · A rejected submission redirects to `/sign` with a blank form, so the
+       admin retypes all 7 fields to fix one. No `req.flash()` of the
+       submitted values and no repopulation.
+     · onlinestudent.ejs already links here with
+       `?fullName=..&cardNumber=..&phoneNumber=..&grade=..&group=..` so an
+       admin can turn a join request into an account in one click. The page
+       currently ignores those query parameters, and the admin retypes all
+       five fields by hand.
+
+   LOCALS (all guarded)
+     csrfToken       string   from req.csrfToken()
+     validator       array    flash("errorMsg") from the middleware (Ajv errors)
+     check           object   flash("errorCard") when the cardNumber is taken
+     student         array    from getstudent() — unused here; present only for
+                              routes/signup.router.js backward compat if other
+                              code references `student` in the same render call
+     flashOk         string   flash("addOk") success message after save
+     prefill         object   { fullName, cardNumber, phoneNumber, grade, group,
+                              educetionlevel } extracted from req.query so the
+                              "إضافة كطالب" link from onlinestudent.ejs can
+                              pre-fill all five fields
+
+   SECURITY: password field is type="password" (never echoed back into an input
+   on error), and the CSRF token is always present.
+
+   NOTE: this page does NOT set `month` on create — that field is only for
+   editStudent. postInfo in signup.contr.js omits it, so every new account gets
+   `month: undefined` and editStudent.ejs shows zero checkboxes ticked until an
+   admin manually selects them. That is existing behaviour left unchanged.
+   ====================================================================== */
+
+var tok = typeof csrfToken !== "undefined" && csrfToken ? csrfToken : "";
+var errs = typeof validator !== "undefined" && Array.isArray(validator) ? validator : [];
+var dupeCard = typeof check !== "undefined" && check ? check : null;
+var ok = typeof flashOk !== "undefined" && flashOk ? String(flashOk) : "";
+
+var pre = {};
+if (typeof prefill !== "undefined" && prefill && typeof prefill === "object") {
+  pre = prefill;
+}
+
+var LEVELS = [
+  { value: "biology", label: "الأحياء" },
+  { value: "geology", label: "الجيولوجيا" }
+];
+var GRADES = [
+  { value: "1st", label: "الصف الأول" },
+  { value: "2nd", label: "الصف الثاني" },
+  { value: "3rd", label: "الصف الثالث" }
+];
+var GROUPS = [
+  { value: "OnlineStudent", label: "أونلاين" },
+  { value: "Saturday", label: "السبت" },
+  { value: "Sunday", label: "الأحد" },
+  { value: "Monday", label: "الاثنين" },
+  { value: "Tuesday", label: "الثلاثاء" },
+  { value: "Wednesday", label: "الأربعاء" },
+  { value: "Thursday", label: "الخميس" },
+  { value: "Friday", label: "الجمعة" }
+];
+
+/* Find the Ajv error for a given path. Ajv sets `err.instancePath` to
+   "/fullName", "/cardNumber", etc. */
+var findErr = function (path) {
+  for (var i = 0; i < errs.length; i++) {
+    if (errs[i].instancePath === path) return errs[i];
+  }
+  return null;
+};
+
+var fullNameErr = findErr("/fullName");
+var cardErr = findErr("/cardNumber");
+var passErr = findErr("/password");
+var confirmErr = findErr("/confirmPassword");
+%>
+
+<% if (ok) { %>
+<div class="flash flash--ok" role="status" aria-live="polite">
+  <%= ok %>
+</div>
+<% } %>
+
+<section class="form-card">
+  <h2 class="form-card__title">إضافة طالب جديد</h2>
+  <p class="form-card__lede">
+    إنشاء حساب منصة لطالب. الحقول المطلوبة: الاسم الكامل، رقم الكارت، كلمة السر.
+  </p>
+
+  <form method="post" action="/addStudent">
+    <input type="hidden" name="_csrf" value="<%= tok %>" />
+
+    <div class="form-grid">
+      <div class="form-field<%= fullNameErr ? " form-field--error" : "" %>">
+        <label class="label" for="fullName">الاسم الكامل <abbr title="مطلوب">*</abbr></label>
+        <input
+          class="input"
+          type="text"
+          id="fullName"
+          name="fullName"
+          value="<%= pre.fullName || "" %>"
+          autocomplete="name"
+          required
+          aria-describedby="<%= fullNameErr ? "fullName-error" : "" %>"
+        />
+        <% if (fullNameErr) { %>
+        <span class="field-hint field-hint--error" id="fullName-error"><%= fullNameErr.message %></span>
+        <% } %>
+      </div>
+
+      <div class="form-field<%= cardErr || dupeCard ? " form-field--error" : "" %>">
+        <label class="label" for="cardNumber">رقم الكارت <abbr title="مطلوب">*</abbr></label>
+        <input
+          class="input input--ltr"
+          type="text"
+          id="cardNumber"
+          name="cardNumber"
+          value="<%= pre.cardNumber || "" %>"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          required
+          aria-describedby="<%= cardErr || dupeCard ? "cardNumber-error" : "" %>"
+        />
+        <% if (cardErr) { %>
+        <span class="field-hint field-hint--error" id="cardNumber-error"><%= cardErr.message %></span>
+        <% } else if (dupeCard) { %>
+        <span class="field-hint field-hint--error" id="cardNumber-error">رقم الكارت مُستخدَم بالفعل.</span>
+        <% } %>
+      </div>
+
+      <div class="form-field">
+        <label class="label" for="phoneNumber">رقم الهاتف</label>
+        <input
+          class="input input--ltr"
+          type="tel"
+          id="phoneNumber"
+          name="phoneNumber"
+          value="<%= pre.phoneNumber || "" %>"
+          autocomplete="tel"
+          inputmode="tel"
+          pattern="[0-9]*"
+        />
+      </div>
+
+      <div class="form-field">
+        <label class="label" for="educetionlevel">المادة</label>
+        <select class="select" id="educetionlevel" name="educetionlevel">
+          <option value="">— اختر —</option>
+          <% for (var l = 0; l < LEVELS.length; l++) { %>
+          <option
+            value="<%= LEVELS[l].value %>"
+            <%= pre.educetionlevel === LEVELS[l].value ? "selected" : "" %>
+          >
+            <%= LEVELS[l].label %>
+          </option>
+          <% } %>
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label class="label" for="grade">الصف</label>
+        <select class="select" id="grade" name="grade">
+          <option value="">— اختر —</option>
+          <% for (var g = 0; g < GRADES.length; g++) { %>
+          <option
+            value="<%= GRADES[g].value %>"
+            <%= pre.grade === GRADES[g].value ? "selected" : "" %>
+          >
+            <%= GRADES[g].label %>
+          </option>
+          <% } %>
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label class="label" for="group">المجموعة</label>
+        <select class="select" id="group" name="group">
+          <option value="">— اختر —</option>
+          <% for (var gr = 0; gr < GROUPS.length; gr++) { %>
+          <option
+            value="<%= GROUPS[gr].value %>"
+            <%= pre.group === GROUPS[gr].value ? "selected" : "" %>
+          >
+            <%= GROUPS[gr].label %>
+          </option>
+          <% } %>
+        </select>
+      </div>
+
+      <div class="form-field<%= passErr ? " form-field--error" : "" %>">
+        <label class="label" for="password">كلمة السر <abbr title="مطلوب">*</abbr></label>
+        <input
+          class="input input--ltr"
+          type="password"
+          id="password"
+          name="password"
+          autocomplete="new-password"
+          required
+          aria-describedby="<%= passErr ? "password-error" : "" %>"
+        />
+        <% if (passErr) { %>
+        <span class="field-hint field-hint--error" id="password-error"><%= passErr.message %></span>
+        <% } %>
+      </div>
+
+      <div class="form-field<%= confirmErr ? " form-field--error" : "" %>">
+        <label class="label" for="confirmPassword">تأكيد كلمة السر <abbr title="مطلوب">*</abbr></label>
+        <input
+          class="input input--ltr"
+          type="password"
+          id="confirmPassword"
+          name="confirmPassword"
+          autocomplete="new-password"
+          required
+          aria-describedby="<%= confirmErr ? "confirmPassword-error" : "" %>"
+        />
+        <% if (confirmErr) { %>
+        <span class="field-hint field-hint--error" id="confirmPassword-error">كلمتا السر غير متطابقتين.</span>
+        <% } %>
+      </div>
+
+      <div class="form-field">
+        <label class="label" for="admin">الصلاحية</label>
+        <select class="select" id="admin" name="admin">
+          <option value="false">طالب</option>
+          <option value="true">مشرف</option>
+        </select>
+        <span class="field-hint">
+          الطالب العادي يمكنه فتح الدروس والاختبارات. المشرف يصل إلى لوحة التحكم.
+        </span>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn" type="submit">حفظ</button>
+      <a class="btn btn--ghost" href="/student">إلغاء</a>
+    </div>
+  </form>
+</section>
+
+<%- include("_foot") %>

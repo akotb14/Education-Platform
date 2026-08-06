@@ -1,199 +1,489 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
   <head>
-    <link rel="icon" type="image/png" href="../assets/images/logo.png" />
-
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script
-      src="https://kit.fontawesome.com/64d58efce2.js"
-      crossorigin="anonymous"
-    ></script>
-    <link rel="stylesheet" href="../Log in mervat/style.css" />
-    <title>كوين الاحياء والچيولوچيا</title>
-    <script
-      src="https://kit.fontawesome.com/f05b3a1e7e.js"
-      crossorigin="anonymous"
-    ></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="تسجيل الدخول إلى منصة أ/ مرڤت عبدالرحمن لشرح منهج الأحياء والجيولوجيا للثانوية العامة."
+    />
+    <meta name="theme-color" content="#fe3f40" />
+    <!-- A login page has nothing to gain from being indexed. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <title>تسجيل الدخول | كوين الاحياء والچيولوچيا</title>
+
+    <link rel="icon" type="image/png" href="/assets/images/logo.png" />
+
+    <!-- Set before the stylesheets so the card never flashes in un-animated.
+         CSS keeps everything visible unless this class is present, so a JS
+         failure leaves a usable form rather than a blank one. -->
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="/assets/css/tokens.css" />
+    <link rel="stylesheet" href="/assets/css/auth.css" />
+
+    <script src="/assets/js/auth.js" defer></script>
   </head>
+
   <body oncontextmenu="return false;">
-    <div class="container">
-      <div class="forms-container">
-        <div class="signin-signup">
-          <form method="post" class="sign-in-form">
-            <h2 class="title">تسجيل الدخول</h2>
-            <input type="hidden" name="_csrf" value="<%=csrfToken%>" />
-            <div class="input-field">
-              <i class="fa-solid fa-phone"></i>
-              <input
-                type="text"
-                placeholder=" رقم الهاتف"
-                name="phoneNumber"
-                required
-              />
-            </div>
+    <a class="sr-only skip" href="#form-card">تخطي إلى النموذج</a>
 
-            <div class="input-field">
-              <i class="fa-solid fa-unlock"></i>
-              <input
-                type="password"
-                placeholder="كلمه السر"
-                name="password"
-                required
-              />
-            </div>
-            <input type="submit" value="تسجيل الدخول" class="btn solid" />
-            <p class="social-text">تابعنا عبر المنصات الاجتماعية</p>
-            <div class="social-media">
-              <a
-                href="https://www.facebook.com/110791531658361/posts/pfbid0c69AZYrLKtQCiFQXe7t7vpaw4bi9WRtpT1SavhTNHJ1kXWonQ7bVSdpRhuVthVyTl/"
-                class="social-icon"
-              >
-                <i class="fab fa-facebook-f"></i>
-              </a>
-              <a
-                href="whatsapp://send?text=Hello!&phone=01122839310"
-                class="social-icon"
-              >
-                <i class="fa-brands fa-whatsapp"></i>
-              </a>
-              <a href="#" class="social-icon">
-                <i class="fa-brands fa-youtube"></i>
-              </a>
-            </div>
-          </form>
-          <form method="post" class="sign-up-form">
-            <h2 class="title">سجل الان</h2>
-            <input type="hidden" name="_csrf" value="<%=csrfToken%>" />
+    <div class="auth">
+      <!-- ======================================================= brand side -->
+      <aside class="auth__brand">
+        <span class="auth__mesh" aria-hidden="true"></span>
+        <span class="auth__grid-lines" aria-hidden="true"></span>
+        <span class="orb orb--1" aria-hidden="true"></span>
+        <span class="orb orb--2" aria-hidden="true"></span>
 
-            <div class="input-field">
-              <i class="fas fa-user"></i>
-              <input
-                type="text"
-                placeholder="الاسم بالكامل "
-                name="fullName"
-                required
-              />
-            </div>
-            <div class="input-field">
-              <i class="fa-solid fa-address-card"></i>
-              <input
-                type="text"
-                placeholder="رقم الكارت "
-                name="cardNumber"
-                required
-              />
-            </div>
-            <div class="input-field">
-              <i class="fa-solid fa-phone"></i>
-              <input
-                type="text"
-                placeholder="الهاتف "
-                name="phoneNumber"
-                required
-              />
-            </div>
-
-            <div class="input-field">
-              <i class="fa-solid fa-user-graduate"></i>
-              <select name="grade">
-                <option value="" class="placeholder" disabled selected hidden>
-                  الصفوف الدراسيه
-                </option>
-                <option name="grade" value="1st">الف الاول الثانوى</option>
-                <option name="grade" value="2nd">الصف الثانى الثانوى</option>
-                <option name="grade" value="3rd">الصف الثالث الثانوى</option>
-              </select>
-            </div>
-            <div class="input-field">
-              <i class="fa-solid fa-user-graduate"></i>
-              <select name="educetionlevel">
-                <option value="" class="placeholder" disabled selected hidden>
-                  الماده المراد الاشتراك بها
-                </option>
-                <option name="educetionlevel" value="biology">احياء</option>
-                <option name="educetionlevel" value="geology">چيولوچيا</option>
-              </select>
-            </div>
-            <div class="input-field">
-              <i class="fa-regular fa-calendar-days"></i>
-              <select name="group" id="group">
-                <option
-                  name="group"
-                  value=""
-                  class="placeholder"
-                  disabled
-                  selected
-                  hidden
-                >
-                  Group
-                </option>
-                <option name="group" value="OnlineStudent">
-                  OnlineStudent
-                </option>
-                <option name="group" value="Monday">Monday</option>
-                <option name="group" value="Tuesday">Tuesday</option>
-                <option name="group" value="Wednesday">Wednesday</option>
-                <option name="group" value="Thursday">Thursday</option>
-                <option name="group" value="Friday">Friday</option>
-                <option name="group" value="Saturday">Saturday</option>
-                <option name="group" value="Sunday">Sunday</option>
-              </select>
-            </div>
-            <input
-              type="submit"
-              class="btn"
-              value="ارسال البيانات"
-              name="loginOnline"
+        <div class="auth__brand-inner">
+          <a class="auth__logo" href="/" aria-label="العودة إلى الصفحة الرئيسية">
+            <img
+              src="/assets/images/logo.png"
+              alt="منصة أ/ مرڤت عبدالرحمن"
+              width="960"
+              height="960"
             />
-            <p class="social-text">إملئ البيانات وتواصل معنا عبر الواتساب</p>
-            <div class="social-media">
-              <a
-                href="https://www.facebook.com/110791531658361/posts/pfbid0c69AZYrLKtQCiFQXe7t7vpaw4bi9WRtpT1SavhTNHJ1kXWonQ7bVSdpRhuVthVyTl/"
-                class="social-icon"
-              >
-                <i class="fab fa-facebook-f"></i>
-              </a>
-              <a
-                href="whatsapp://send?text=Hello!&phone=01122839310"
-                class="social-icon"
-              >
-                <i class="fa-brands fa-whatsapp"></i>
-              </a>
-              <a href="#" class="social-icon">
-                <i class="fa-brands fa-youtube"></i>
-              </a>
-            </div>
-          </form>
-        </div>
-      </div>
+          </a>
 
-      <div class="panels-container">
-        <div class="panel left-panel">
-          <div class="content">
-            <h3>ليس لديك حساب ؟</h3>
-            <button class="btn transparent" id="sign-up-btn">سجل الان</button>
-          </div>
-          <a href="/">
-            <img src="/assets/images/logo.png" class="image" alt="" />
-          </a>
+          <h2 class="auth__title">
+            كوين <em class="grad-text">الأحياء</em> والجيولوجيا
+          </h2>
+          <p class="auth__lede">
+            منصة أ/ مرڤت عبدالرحمن — خبرة أكثر من ٣٠ عامًا في الثانوية العامة.
+          </p>
+
+          <ul class="auth__points">
+            <li class="auth__point">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                <path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              شرح كامل للمنهج بالفيديو، متاح في أي وقت
+            </li>
+            <li class="auth__point">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                <path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              اختبارات وواجبات بعد كل درس لمتابعة مستواك
+            </li>
+            <li class="auth__point">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                <path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              متابعة درجاتك أولًا بأول
+            </li>
+          </ul>
         </div>
-        <div class="panel right-panel">
-          <div class="content">
-            <h3>لديك حساب بالفعل؟</h3>
-            <button class="btn transparent" id="sign-in-btn">
-              تسجيل الدخول
-            </button>
+      </aside>
+
+      <!-- ======================================================== form side -->
+      <main class="auth__main" id="main">
+        <div class="auth__card" id="form-card">
+          <div class="auth__heading">
+            <h1>أهلاً بك من جديد</h1>
+            <p>سجّل دخولك للمتابعة، أو اطلب الاشتراك إن لم يكن لديك حساب.</p>
           </div>
-          <a href="/">
-            <img src="/assets/images/logo.png" class="image" alt="" />
-          </a>
+
+          <!-- Server messages. errorLogin was passed to this view before but
+               never rendered, so a wrong password produced a blank form with no
+               explanation whatsoever. Both flashes are arrays. -->
+          <% if (typeof errorLogin !== "undefined" && errorLogin && errorLogin.length) { %>
+          <div
+            class="alert alert--error"
+            role="alert"
+            tabindex="-1"
+            data-autofocus-alert
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 8v5M12 16.5v.01" stroke-linecap="round" />
+            </svg>
+            <span><%= errorLogin[0] %></span>
+          </div>
+          <% } %>
+
+          <% if (typeof joinOk !== "undefined" && joinOk && joinOk.length) { %>
+          <div
+            class="alert alert--ok"
+            role="status"
+            tabindex="-1"
+            data-autofocus-alert
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="m8.5 12.5 2.5 2.5 4.5-5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span><%= joinOk[0] %></span>
+          </div>
+          <% } %>
+
+          <!-- Radios drive the panes in CSS alone, so the tabs work with JS
+               off. They are clipped rather than hidden so they stay focusable
+               and arrow-keyable — the keyboard behaviour a tablist should have. -->
+          <input
+            class="tab-input"
+            type="radio"
+            name="auth-tab"
+            id="tab-login"
+            checked
+          />
+          <input class="tab-input" type="radio" name="auth-tab" id="tab-join" />
+
+          <div class="tabs">
+            <span class="tab-ind" aria-hidden="true"></span>
+            <label class="tabs__btn" for="tab-login">تسجيل الدخول</label>
+            <label class="tabs__btn" for="tab-join">طلب اشتراك</label>
+          </div>
+
+          <div class="panes">
+            <!-- ============================================== login pane -->
+            <section class="pane pane--login" aria-label="تسجيل الدخول">
+              <form method="post" action="/login" class="form" data-validate-form>
+                <input type="hidden" name="_csrf" value="<%=csrfToken%>" />
+
+                <!-- Login checks phoneNumber + password only. Deliberately no
+                     format rule on either: accounts were created by hand over
+                     several years, so an unknown stored format must not lock a
+                     real student out of their own account. -->
+                <div class="field">
+                  <div class="field__control">
+                    <input
+                      class="field__input"
+                      type="tel"
+                      id="login-phone"
+                      name="phoneNumber"
+                      placeholder=" "
+                      inputmode="numeric"
+                      autocomplete="username tel"
+                      dir="ltr"
+                      required
+                      data-rules="required"
+                    />
+                    <span class="field__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1Z" stroke-linecap="round" stroke-linejoin="round" />
+                      </svg>
+                    </span>
+                    <label class="field__label" for="login-phone">رقم الهاتف</label>
+                  </div>
+                  <span class="field__error" aria-live="polite"></span>
+                </div>
+
+                <div class="field field--password">
+                  <div class="field__control">
+                    <input
+                      class="field__input"
+                      type="password"
+                      id="login-password"
+                      name="password"
+                      placeholder=" "
+                      autocomplete="current-password"
+                      required
+                      data-rules="required"
+                    />
+                    <span class="field__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="4" y="10" width="16" height="10" rx="2" />
+                        <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke-linecap="round" />
+                      </svg>
+                    </span>
+                    <label class="field__label" for="login-password">كلمة السر</label>
+                    <button
+                      class="pw-toggle"
+                      type="button"
+                      aria-pressed="false"
+                      aria-controls="login-password"
+                      aria-label="إظهار كلمة السر"
+                      data-pw-toggle
+                    >
+                      <svg class="pw-toggle__on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" stroke-linejoin="round" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                      <svg class="pw-toggle__off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M2 12s3.6-7 10-7c1.7 0 3.2.5 4.5 1.2M22 12s-3.6 7-10 7c-1.7 0-3.2-.5-4.5-1.2" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="m4 4 16 16" stroke-linecap="round" />
+                      </svg>
+                    </button>
+                  </div>
+                  <span class="field__error" aria-live="polite"></span>
+                </div>
+
+                <!-- No name attribute on this submit, and none anywhere in this
+                     form. The controller reads req.body.loginOnline to decide
+                     which branch to run; it must stay absent here. -->
+                <button
+                  class="btn btn--primary btn--block"
+                  type="submit"
+                  data-magnetic
+                  data-submit
+                >
+                  <span class="btn__spinner" aria-hidden="true"></span>
+                  <span class="btn__label">تسجيل الدخول</span>
+                </button>
+
+                <p class="form__meta">
+                  <span>ليس لديك حساب؟</span>
+                  <!-- A <label> rather than a link: it drives the same radio the
+                       tabs use, so switching panes needs no JS at all. -->
+                  <label class="link link--btn" for="tab-join">اطلب الاشتراك</label>
+                </p>
+              </form>
+            </section>
+
+            <!-- =============================================== join pane -->
+            <section class="pane pane--join" aria-label="طلب اشتراك">
+              <form method="post" action="/login" class="form" data-validate-form>
+                <input type="hidden" name="_csrf" value="<%=csrfToken%>" />
+
+                <!-- THE DISCRIMINATOR. controllers/signup.contr.js branches on
+                     `req.body.loginOnline != "ارسال البيانات"`, so this exact
+                     string is what routes the POST to the join branch instead
+                     of the login branch.
+
+                     It lives in a hidden input rather than on the submit button
+                     so the button's visible label can be changed freely. Do not
+                     edit this value — a single byte's drift turns every join
+                     request into a failed login. -->
+                <input type="hidden" name="loginOnline" value="ارسال البيانات" />
+
+                <p class="field__hint" style="margin-block-end: var(--sp-2)">
+                  هذا النموذج يرسل طلب اشتراك للمراجعة — لا يُنشئ حسابًا. سيتم
+                  التواصل معك لإنشاء الحساب بعد المراجعة.
+                </p>
+
+                <div class="field">
+                  <div class="field__control">
+                    <input
+                      class="field__input"
+                      type="text"
+                      id="join-name"
+                      name="fullName"
+                      placeholder=" "
+                      autocomplete="name"
+                      required
+                      data-rules="required name"
+                    />
+                    <span class="field__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="8" r="4" />
+                        <path d="M4 20c0-4 3.6-6 8-6s8 2 8 6" stroke-linecap="round" />
+                      </svg>
+                    </span>
+                    <label class="field__label" for="join-name">الاسم بالكامل</label>
+                  </div>
+                  <span class="field__error" aria-live="polite"></span>
+                </div>
+
+                <div class="form__row form__row--2">
+                  <div class="field">
+                    <div class="field__control">
+                      <input
+                        class="field__input"
+                        type="text"
+                        id="join-card"
+                        name="cardNumber"
+                        placeholder=" "
+                        dir="ltr"
+                        required
+                        data-rules="required"
+                      />
+                      <span class="field__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="3" y="5" width="18" height="14" rx="2" />
+                          <path d="M3 10h18" stroke-linecap="round" />
+                        </svg>
+                      </span>
+                      <label class="field__label" for="join-card">رقم الكارت</label>
+                    </div>
+                    <span class="field__error" aria-live="polite"></span>
+                  </div>
+
+                  <!-- This number is new data the centre has to dial, so unlike
+                       the login field it IS format-checked. -->
+                  <div class="field">
+                    <div class="field__control">
+                      <input
+                        class="field__input"
+                        type="tel"
+                        id="join-phone"
+                        name="phoneNumber"
+                        placeholder=" "
+                        inputmode="numeric"
+                        autocomplete="tel"
+                        dir="ltr"
+                        required
+                        data-rules="required phone"
+                      />
+                      <span class="field__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1Z" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                      </span>
+                      <label class="field__label" for="join-phone">رقم الهاتف</label>
+                    </div>
+                    <span class="field__error" aria-live="polite"></span>
+                  </div>
+                </div>
+
+                <!-- Every option VALUE below is load-bearing: admin pages match
+                     on them and the schema enums constrain them. Only the
+                     visible labels are translated. -->
+                <div class="form__row form__row--2">
+                  <div class="field field--select">
+                    <div class="field__control">
+                      <select
+                        class="field__input"
+                        id="join-grade"
+                        name="grade"
+                        required
+                        data-rules="choose"
+                      >
+                        <option value="" disabled selected hidden></option>
+                        <option value="1st">الصف الأول الثانوي</option>
+                        <option value="2nd">الصف الثاني الثانوي</option>
+                        <option value="3rd">الصف الثالث الثانوي</option>
+                      </select>
+                      <span class="field__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M12 4 2 9l10 5 10-5-10-5Z" stroke-linejoin="round" />
+                          <path d="M6 11.5V16c0 1.5 3 3 6 3s6-1.5 6-3v-4.5" stroke-linecap="round" />
+                        </svg>
+                      </span>
+                      <label class="field__label" for="join-grade">الصف الدراسي</label>
+                      <span class="field__chevron" aria-hidden="true"></span>
+                    </div>
+                    <span class="field__error" aria-live="polite"></span>
+                  </div>
+
+                  <div class="field field--select">
+                    <div class="field__control">
+                      <select
+                        class="field__input"
+                        id="join-subject"
+                        name="educetionlevel"
+                        required
+                        data-rules="choose"
+                      >
+                        <option value="" disabled selected hidden></option>
+                        <option value="biology">أحياء</option>
+                        <option value="geology">چيولوچيا</option>
+                      </select>
+                      <span class="field__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M4 19V6a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2Z" stroke-linejoin="round" />
+                          <path d="M8 8h7" stroke-linecap="round" />
+                        </svg>
+                      </span>
+                      <label class="field__label" for="join-subject">المادة</label>
+                      <span class="field__chevron" aria-hidden="true"></span>
+                    </div>
+                    <span class="field__error" aria-live="polite"></span>
+                  </div>
+                </div>
+
+                <div class="field field--select">
+                  <div class="field__control">
+                    <select
+                      class="field__input"
+                      id="join-group"
+                      name="group"
+                      required
+                      data-rules="choose"
+                    >
+                      <option value="" disabled selected hidden></option>
+                      <option value="OnlineStudent">أونلاين</option>
+                      <option value="Saturday">السبت</option>
+                      <option value="Sunday">الأحد</option>
+                      <option value="Monday">الاثنين</option>
+                      <option value="Tuesday">الثلاثاء</option>
+                      <option value="Wednesday">الأربعاء</option>
+                      <option value="Thursday">الخميس</option>
+                      <option value="Friday">الجمعة</option>
+                    </select>
+                    <span class="field__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="5" width="18" height="16" rx="2" />
+                        <path d="M3 10h18M8 3v4M16 3v4" stroke-linecap="round" />
+                      </svg>
+                    </span>
+                    <label class="field__label" for="join-group">المجموعة</label>
+                    <span class="field__chevron" aria-hidden="true"></span>
+                  </div>
+                  <span class="field__error" aria-live="polite"></span>
+                </div>
+
+                <button
+                  class="btn btn--primary btn--block"
+                  type="submit"
+                  data-magnetic
+                  data-submit
+                >
+                  <span class="btn__spinner" aria-hidden="true"></span>
+                  <span class="btn__label">إرسال طلب الاشتراك</span>
+                </button>
+
+                <p class="form__meta">
+                  <span>لديك حساب بالفعل؟</span>
+                  <label class="link link--btn" for="tab-login">تسجيل الدخول</label>
+                </p>
+              </form>
+            </section>
+          </div>
+
+          <p class="divider">أو تواصل معنا</p>
+
+          <div class="socials">
+            <!-- wa.me, not the whatsapp:// scheme the old page used: that only
+                 resolves with the app installed and dead-ends on desktop. The
+                 country code is required, so 011… becomes 2011…. -->
+            <a
+              class="social social--wa"
+              href="https://wa.me/201122839310"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span class="sr-only">واتساب</span>
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.7 4.8-1.3A10 10 0 1 0 12 2Zm5.8 14.2c-.2.7-1.4 1.3-2 1.4-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.8-.7-3.1-1.3-5.1-4.5-5.3-4.7-.1-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.3.5-.4.7-.4h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.3 0 .5l-.3.5-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.1 1 2.1 1.3 2.4 1.4.3.1.4.1.6-.1l.9-1c.2-.2.4-.2.6-.1l2 1c.2.1.4.2.4.3.1.1.1.6-.1 1.3Z" />
+              </svg>
+            </a>
+            <!-- Points at the page, not the single 2022 post the old page
+                 linked. No YouTube icon: the existing link was href="#". -->
+            <a
+              class="social social--fb"
+              href="https://www.facebook.com/110791531658361"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span class="sr-only">فيسبوك</span>
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M14 9V7.5c0-.7.3-1.1 1.2-1.1H17V3.5h-2.6C11.6 3.5 11 5.2 11 7.3V9H9v3h2v9h3v-9h2.4l.4-3H14Z" />
+              </svg>
+            </a>
+          </div>
+
+          <p class="auth__foot">
+            <a href="/">العودة إلى الصفحة الرئيسية</a>
+          </p>
         </div>
-      </div>
+      </main>
     </div>
+
+    <!-- Kept per your earlier decision. `event.keyCode` in the first branch was
+         a latent ReferenceError under strict mode; it reads `e` now. -->
     <script>
       document.onkeydown = function (e) {
-        if (event.keyCode == 123) {
+        if (e.keyCode == 123) {
           return false;
         }
         if (e.ctrlKey && e.shiftKey && e.keyCode == "I".charCodeAt(0)) {
@@ -207,6 +497,5 @@
         }
       };
     </script>
-    <script src="../Log in mervat/app.js"></script>
   </body>
 </html>

@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#fe3f40" />
+
+    <%
+      /* =====================================================================
+         SHARED QUESTION PAPER — replaces views/showQuestion.ejs, views/quiz/
+         showQuestion.ejs and views/homework/showQuestion.ejs.
+
+         Those three diverged only in which key held the questions
+         (quiz.quiz / quiz.quizId.quiz / quiz.homeId.quiz) and whether a timer
+         was drawn. Each caller now normalises to `paper` before rendering.
+         The originals are left on disk, unreferenced.
+
+         Rendered by:
+           controllers/quiz.contro.js  GET /examApp/:nameQuiz      kind "exam"
+           routes/quiz.router.js       GET /quizApp/:nameQuiz      kind "quiz"
+           routes/homework.router.js   GET /homeworkApp/:nameQuiz  kind "homework"
+
+         LOCALS
+           kind          "quiz" | "exam" | "homework"
+           paper         the quiz document (its `quiz` array holds the questions)
+           secondsLeft   seconds remaining, or null on an untimed paper
+           totalSeconds  the full allowance, for the progress bar
+           alreadyTaken  truthy when this student has already submitted
+           backHref      where the exit link goes
+
+         THE POST CONTRACT IS UNCHANGED. Radios are still named answer0..answerN
+         and still post to this same URL, because all three graders read
+         req.body[`answer${i}`] against paper.quiz[i].correctAnswer by index. */
+
+      var kindRaw = typeof kind !== "undefined" && kind ? String(kind) : "quiz";
+      var KINDS = {
+        quiz:     { a: "الكويز",   done: "تسليم الكويز" },
+        exam:     { a: "الامتحان", done: "تسليم الامتحان" },
+        homework: { a: "الواجب",   done: "تسليم الواجب" }
+      };
+      var K = KINDS[kindRaw] || KINDS.quiz;
+
+      var doc = (typeof paper !== "undefined" && paper && typeof paper === "object") ? paper : null;
+      var title = doc && doc.nameQuiz ? String(doc.nameQuiz) : "";
+
+      /* Rows are read defensively. A question saved through the admin form
+         with no options at all stores answer: [undefined], and the old
+         showAnswer template did `for (j of data.quiz[i].answer[0])` straight
+         onto that — "answer[0] is not iterable", thrown inside render. Express
+         routes render errors to its own error handler rather than to the
+         route's catch, so that surfaced as a 500 on the whole paper. */
+      var rows = [];
+      var all = doc && Array.isArray(doc.quiz) ? doc.quiz : [];
+      for (var i = 0; i < all.length; i++) {
+        var q = all[i];
+        if (!q) continue;
+
+        var opts = [];
+        var raw = q.answer && Array.isArray(q.answer) ? q.answer[0] : null;
+        if (raw && typeof raw.length === "number") {
+          for (var o = 0; o < raw.length; o++) {
+            var v = raw[o] == null ? "" : String(raw[o]).trim();
+            /* Empty strings are real in this data: the admin form posts a
+               fixed number of option boxes and blanks are stored as "". */
+            if (v) opts.push(v);
+          }
+        }
+
+        /* Uploaded question images land in ./images/ (middlewares/upload.js),
+           which app.js:73 mounts at the root, so the file is served at
+           /<filename>.
+
+           The old code was image.split('\\')[1] || image.split('/')[1] — the
+           SECOND segment, not the last. It happened to work because multer
+           stores exactly "images\name.png", but any deeper path returned
+           undefined and rendered src="/". Splitting on both separators and
+           taking the last segment is correct on Windows and POSIX alike. */
+        var img = q.image ? String(q.image).trim() : "";
+        var imgName = img ? img.split(/[\\/]/).pop() : "";
+
+        rows.push({
+          question: q.question == null ? "" : String(q.question),
+          options: opts,
+          img: imgName ? "/" + encodeURIComponent(imgName) : ""
+        });
+      }
+
+      var taken = typeof alreadyTaken !== "undefined" && !!alreadyTaken;
+      var exitHref = typeof backHref !== "undefined" && backHref ? String(backHref) : "/";
+
+      var left  = typeof secondsLeft  !== "undefined" && secondsLeft  != null ? Math.max(0, Math.floor(Number(secondsLeft)))  : null;
+      var total = typeof totalSeconds !== "undefined" && totalSeconds != null ? Math.max(0, Math.floor(Number(totalSeconds))) : null;
+      if (left !== null && isNaN(left)) left = null;
+      if (total === null || isNaN(total) || total <= 0) total = left;
+      var timed = left !== null && total !== null && total > 0;
+    %>
+
+    <meta name="robots" content="noindex, nofollow" />
+    <title>
+      <%= title ? title + " — " : "" %><%= K.a %> | منصة أ/ مرڤت عبدالرحمن
+    </title>
+
+    <link rel="icon" type="image/png" href="/assets/images/logo.png" />
+
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="/assets/css/tokens.css" />
+    <link rel="stylesheet" href="/assets/css/home.css" />
+    <link rel="stylesheet" href="/assets/css/listing.css" />
+    <link rel="stylesheet" href="/assets/css/quiz.css" />
+
+    <script src="/assets/js/home.js" defer></script>
+    <script src="/assets/js/quiz.js" defer></script>
+  </head>
+
+  <body oncontextmenu="return false;">
+    <a class="sr-only" href="#main">تخطي إلى المحتوى</a>
+
+    <header class="site-header">
+      <div class="container site-header__inner">
+        <a class="site-logo" href="/">
+          <img
+            src="/assets/images/logo.png"
+            alt="منصة أ/ مرڤت عبدالرحمن"
+            width="960"
+            height="960"
+          />
+        </a>
+        <!-- No nav on a paper in progress: every link here is a way to lose an
+             attempt that cannot be retaken. The logo still goes home, and the
+             exit link at the foot says plainly what leaving costs. -->
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="page-hero">
+        <div class="container page-hero__inner">
+          <h1 class="page-hero__title">
+            <% if (title) { %><em><%= title %></em><% } else { %>
+            <em><%= K.a %></em><% } %>
+          </h1>
+
+          <div class="meta-row">
+            <span class="chip chip--primary">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M4 6h16v2H4V6Zm0 5h16v2H4v-2Zm0 5h10v2H4v-2Z" />
+              </svg>
+              <span class="num"><%= rows.length %></span> سؤال
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="container">
+          <% if (taken) { %>
+          <!-- The old page rendered the bare English string "you can not enter
+               exam again" as an unstyled <h2> on a blank document. -->
+          <div class="empty">
+            <span class="empty__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z" />
+              </svg>
+            </span>
+            <h2 class="empty__title">لقد قمت بحل <%= K.a %> بالفعل</h2>
+            <p class="empty__text">
+              تم تسجيل إجاباتك، ولا يُسمح بأكثر من محاولة واحدة.
+            </p>
+            <div class="empty__actions">
+              <a class="btn btn--primary" href="<%= exitHref %>" data-magnetic>
+                العودة
+              </a>
+            </div>
+          </div>
+
+          <% } else if (!rows.length) { %>
+          <div class="empty">
+            <span class="empty__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z" />
+              </svg>
+            </span>
+            <h2 class="empty__title">لا توجد أسئلة في <%= K.a %></h2>
+            <p class="empty__text">
+              لم تتم إضافة أي أسئلة بعد. تواصل مع السنتر إذا استمر ظهور هذه
+              الرسالة.
+            </p>
+            <div class="empty__actions">
+              <a class="btn btn--primary" href="<%= exitHref %>" data-magnetic>
+                العودة
+              </a>
+            </div>
+          </div>
+
+          <% } else { %>
+          <div class="paper">
+            <% if (timed) { %>
+            <!-- data-seconds is this student's own remaining time, computed
+                 from a deadline stored on their degree record. It used to come
+                 from a module-level `let d` in the router — one variable shared
+                 by every student on the server, so two simultaneous attempts
+                 decremented the same counter. -->
+            <div
+              class="paper__timer"
+              data-timer
+              data-seconds="<%= left %>"
+              data-total="<%= total %>"
+              role="timer"
+              aria-live="off"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 10.6V6h-2v7.4l5.2 3.1 1-1.7-4.2-2.2Z" />
+              </svg>
+              <span class="paper__timer-label">الوقت المتبقي</span>
+              <!-- dir="ltr" plus tabular figures: a clock is a Latin digit run
+                   inside an RTL line, and the colons are bidi-neutral, so
+                   without isolation 01:20 can render as 20:01. -->
+              <span class="paper__clock" data-clock dir="ltr">--:--:--</span>
+              <span class="paper__track" aria-hidden="true">
+                <span class="paper__bar" data-bar></span>
+              </span>
+            </div>
+            <% } %>
+
+            <!-- ONE form, opened once around the loop. The old markup opened a
+                 <form> inside the per-question loop and closed it only inside
+                 `if (i === last)`, leaving N-1 unclosed tags. It worked by
+                 accident: the HTML parser drops a <form> start tag while a form
+                 element pointer is already set, so every radio landed in the
+                 first form. Posts to this same URL, as before. -->
+            <form method="post" data-paper-form>
+              <% for (var r = 0; r < rows.length; r++) { var row = rows[r]; %>
+              <div class="q" data-question>
+                <div class="q__head">
+                  <span class="q__num" aria-hidden="true"><%= r + 1 %></span>
+                  <h2 class="q__text">
+                    <span class="sr-only">السؤال <%= r + 1 %>:</span>
+                    <%= row.question %>
+                  </h2>
+                </div>
+
+                <% if (row.img) { %>
+                <figure class="q__figure">
+                  <!-- alt="" is correct here: the image IS the question, and
+                       the question text sits directly above it. The old markup
+                       used alt="sa". -->
+                  <img src="<%= row.img %>" alt="" loading="lazy" />
+                </figure>
+                <% } %>
+
+                <!-- A radiogroup rather than loose inputs, so the question text
+                     is announced once with the options rather than per option. -->
+                <div
+                  class="q__options"
+                  role="radiogroup"
+                  aria-label="إجابات السؤال <%= r + 1 %>"
+                >
+                  <% if (!row.options.length) { %>
+                  <p class="empty__text">لم يتم إضافة اختيارات لهذا السؤال.</p>
+                  <% } %> <% for (var p = 0; p < row.options.length; p++) { %>
+                  <!-- The whole row is the label, so the tap target is the full
+                       card rather than the 20px radio. -->
+                  <label class="opt">
+                    <input
+                      type="radio"
+                      name="answer<%= r %>"
+                      value="<%= row.options[p] %>"
+                    />
+                    <span class="opt__text"><%= row.options[p] %></span>
+                  </label>
+                  <% } %>
+                </div>
+              </div>
+              <% } %>
+
+              <div class="paper__foot">
+                <p class="paper__count">
+                  تمت الإجابة على
+                  <strong>
+                    <span class="num" data-answered>0</span> من
+                    <span class="num"><%= rows.length %></span>
+                  </strong>
+                </p>
+
+                <div class="intro__actions">
+                  <button class="btn btn--primary" type="submit" data-magnetic>
+                    <%= K.done %>
+                  </button>
+                  <a class="btn btn--ghost" href="<%= exitHref %>">
+                    الخروج بدون تسليم
+                  </a>
+                </div>
+
+                <!-- Advisory only; a second press submits anyway. Never
+                     `required` on the inputs: on a timed paper the automatic
+                     submit has to succeed even with blanks. -->
+                <p class="paper__warn" data-warn hidden>
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 2 1 21h22L12 2Zm1 15h-2v-2h2v2Zm0-4h-2V9h2v4Z" />
+                  </svg>
+                  <span>
+                    لديك <span class="num" data-warn-count>0</span> سؤال بدون
+                    إجابة. اضغط «<%= K.done %>» مرة أخرى للتسليم كما هو.
+                  </span>
+                </p>
+              </div>
+            </form>
+          </div>
+          <% } %>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>
+          © <span class="num">2026</span> جميع الحقوق محفوظة — منصة أ/ مرڤت
+          عبدالرحمن.
+        </p>
+      </div>
+    </footer>
+
+    <script>
+      document.onkeydown = function (e) {
+        if (e.keyCode == 123) {
+          return false;
+        }
+        if (e.ctrlKey && e.shiftKey && e.keyCode == "I".charCodeAt(0)) {
+          return false;
+        }
+        if (e.ctrlKey && e.shiftKey && e.keyCode == "J".charCodeAt(0)) {
+          return false;
+        }
+        if (e.ctrlKey && e.keyCode == "U".charCodeAt(0)) {
+          return false;
+        }
+      };
+    </script>
+  </body>
+</html>

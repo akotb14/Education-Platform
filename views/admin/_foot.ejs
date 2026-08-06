@@ -1,0 +1,40 @@
+<%
+/* =========================================================================
+   ADMIN SHELL — BOTTOM HALF. Closes exactly what _head.ejs opens:
+
+       _head:  <div class="admin"> <div class="main"> <main id="main">
+       _foot:  </main>            </div>             </div>
+
+   Kept as a matched pair so no admin view has to know the shell's nesting.
+   Takes no locals.
+   ====================================================================== */
+%>
+        </main>
+      </div>
+    </div>
+
+    <script>
+      /* Right-click / devtools block, carried over verbatim from the old admin
+         pages at the user's explicit request. `event.keyCode` in the original
+         was an implicit global — a ReferenceError in strict mode and in any
+         browser that does not alias window.event; it is `e.keyCode` here. */
+      document.oncontextmenu = function () {
+        return false;
+      };
+      document.onkeydown = function (e) {
+        if (e.keyCode == 123) {
+          return false;
+        }
+        if (e.ctrlKey && e.shiftKey && e.keyCode == "I".charCodeAt(0)) {
+          return false;
+        }
+        if (e.ctrlKey && e.shiftKey && e.keyCode == "J".charCodeAt(0)) {
+          return false;
+        }
+        if (e.ctrlKey && e.keyCode == "U".charCodeAt(0)) {
+          return false;
+        }
+      };
+    </script>
+  </body>
+</html>

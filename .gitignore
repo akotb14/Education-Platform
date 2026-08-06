@@ -1,1 +1,25 @@
+# dependencies
 node_modules
+api/node_modules
+web/node_modules
+
+# secrets — never commit these
+.env
+.env.*
+!.env.example
+
+# build output
+api/dist
+web/dist
+*.tsbuildinfo
+
+# user uploads (runtime data, not source)
+documantion/
+
+# logs
+*.log
+npm-debug.log*
+
+# editor / OS
+.DS_Store
+Thumbs.db

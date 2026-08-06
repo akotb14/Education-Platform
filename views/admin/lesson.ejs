@@ -1,278 +1,399 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Category</title>
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
-    />
-    <link rel="stylesheet" href="../admin/dashboard/assets/css/style.css" />
-    <link rel="stylesheet" href="../admin/category/css/style.css" />
-  </head>
-  <body>
-    <!-- =============== Navigation ================ -->
-    <div class="container">
-      <div class="navigation">
-        <ul>
-          <li>
-            <a href="#" class="nav">
-              <span class="icon">
-                <img src="/logo2.png" alt="" />
-              </span>
-              <span class="title">The Quen Platform</span>
-            </a>
-          </li>
+<%- include("_head", { active: "lessons", title: "الدروس" }) %>
+<%
+/* =========================================================================
+   LESSON / UNIT MANAGER
 
-          <li>
-            <a href="/" class="nav">
-              <span class="icon">
-                <ion-icon name="home-outline"></ion-icon>
-              </span>
-              <span class="title">go to home</span>
-            </a>
-          </li>
-          <li>
-            <a href="/dashboard" class="nav">
-              <span class="icon">
-                <ion-icon name="home-outline"></ion-icon>
-              </span>
-              <span class="title">Dashboard</span>
-            </a>
-          </li>
-          <li>
-            <a href="/student" class="nav">
-              <span class="icon">
-                <ion-icon name="people-outline"></ion-icon>
-              </span>
-              <span class="title">Students</span>
-            </a>
-          </li>
-          <li>
-            <a href="/admin/studentOnline" class="nav">
-              <span class="icon">
-                <ion-icon name="people-outline"></ion-icon>
-              </span>
-              <span class="title">studentOnline</span>
-            </a>
-          </li>
-          <li>
-            <a href="/lesson" class="nav">
-              <span class="icon">
-                <ion-icon name="videocam-outline"></ion-icon>
-              </span>
-              <span class="title">Lessons</span>
-            </a>
-          </li>
-          <li>
-            <a href="/admin/homework" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">Homework</span>
-            </a>
-          </li>
-          <li>
-            <a href="/showStudentsDegree/homework" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">show Homework Degree</span>
-            </a>
-          </li>
+   This page is the UPSTREAM of the whole content tree. Every unit row created
+   here becomes an option in the homework and quiz pickers, and the month rows
+   it creates are what unlock a month for students on month.ejs. Nothing else
+   creates units.
 
-          <li>
-            <a href="/admin/quiz" class="nav">
-              <span class="icon">
-                <ion-icon name="clipboard-outline"></ion-icon>
-              </span>
-              <span class="title">Quiz</span>
-            </a>
-          </li>
-          <li>
-            <a href="/showStudentsDegree/quiz" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">show Quiz Degree</span>
-            </a>
-          </li>
-          <li>
-            <a href="/admin/exam" class="nav">
-              <span class="icon">
-                <ion-icon name="book-outline"></ion-icon>
-              </span>
-              <span class="title">Exam</span>
-            </a>
-          </li>
-          <li>
-            <a href="/showStudentsDegree/exam" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">show Exam Degree</span>
-            </a>
-          </li>
-         
-          <li>
-            <a href="/sign" class="nav">
-              <button class="signout nav">
-                <span class="icon">
-                  <ion-icon name="log-in-outline"></ion-icon>
-                </span>
-                <span class="title">Add Student</span>
-              </button>
-            </a>
-          </li>
-        </ul>
+   WHAT THE OLD PAGE DID
+     · 279 lines, of which ~110 were the copy-pasted sidebar and ~20 were
+       stacked <br /> tags used as vertical spacing between selects.
+     · Delete was a GET link (`/removelesson/:i/:id`) styled with inline
+       `background-color: brown` and `color: var(--white)` — a custom property
+       its stylesheet never defined, so the label was transparent-on-brown.
+       A GET delete fires on prefetch, on a crawler visit and on any mis-click.
+       It is a POST form with a CSRF token and a confirm step now.
+     · Deleting a unit left the homework and quiz attached to it orphaned:
+       the paper stayed in the quiz collection, unreachable from any admin page
+       but still counted. The route cascades now, and this table shows what is
+       attached so the confirm text can name it.
+     · Every column header and control was in English on an Arabic platform,
+       and the placeholder <option>s were `disabled selected hidden` so the
+       control could not be returned to "no selection" once changed.
+     · The form posted with no `action`, relying on the browser defaulting to
+       the current URL. That works at /lesson but silently posts to the wrong
+       place from any other path, so the action is explicit now.
+     · The video field was a bare text input named `lesson` with placeholder
+       "enter link video" — no type="url", no hint about what form the link
+       should take.
+
+   LOCALS
+     lesson     Array of unit documents: { _id, educetionlevel, grade,
+                units: [{ _id, month, unit, lesson, pdf, quizId, homeId }] }
+     csrfToken  String, for the delete forms
+     flashOk    String, set after a successful add
+     flashBad   String, set when an add or delete failed
+
+   All read behind typeof guards — EJS compiles with `with(locals)`, so an
+   unguarded read of a key the route did not pass is a ReferenceError.
+   ====================================================================== */
+
+var docs = typeof lesson !== "undefined" && Array.isArray(lesson) ? lesson : [];
+var tok = typeof csrfToken !== "undefined" && csrfToken ? csrfToken : "";
+var ok = typeof flashOk !== "undefined" && flashOk ? String(flashOk) : "";
+var bad = typeof flashBad !== "undefined" && flashBad ? String(flashBad) : "";
+
+var SUBJECTS = { biology: "الأحياء", geology: "الجيولوجيا" };
+var GRADES = {
+  "1st": "الصف الأول",
+  "2nd": "الصف الثاني",
+  "3rd": "الصف الثالث"
+};
+
+/* The 20 month values are stored in Arabic and matched by exact string in
+   three places (month collection, quiz.month, unit.units.month), so the values
+   below must stay byte-identical to what the old form posted. Built from an
+   ordinal list rather than 20 hand-written <option> lines that had already
+   drifted between this page and homework.ejs. */
+var ORDINALS = [
+  "الاول", "الثاني", "الثالث", "الرابع", "الخامس",
+  "السادس", "السابع", "الثامن", "التاسع", "العاشر"
+];
+var MONTHS = [];
+for (var m = 0; m < ORDINALS.length; m++) {
+  MONTHS.push({ value: "الشهر " + ORDINALS[m], term: 1 });
+}
+for (var m2 = 0; m2 < ORDINALS.length; m2++) {
+  MONTHS.push({ value: "الشهر " + ORDINALS[m2] + " الترم الثاني", term: 2 });
+}
+
+/* Flatten to one row per unit. The old template nested two `for...of` loops
+   using undeclared `i` and `j`, which makes them implicit globals — harmless
+   in a template but it is the same pattern that caused the concurrency bugs in
+   the routers. */
+var rows = [];
+for (var d = 0; d < docs.length; d++) {
+  var doc = docs[d] || {};
+  var units = Array.isArray(doc.units) ? doc.units : [];
+  for (var u = 0; u < units.length; u++) {
+    var row = units[u] || {};
+    rows.push({
+      docId: doc._id,
+      rowId: row._id,
+      educetionlevel: doc.educetionlevel || "",
+      grade: doc.grade || "",
+      month: row.month || "",
+      unit: row.unit || "",
+      video: row.lesson || "",
+      pdf: row.pdf || "",
+      hasQuiz: !!row.quizId,
+      hasHome: !!row.homeId
+    });
+  }
+}
+
+/* Sort so the table reads subject → grade → month → unit instead of raw
+   document order, which put every unit of one subject in one block regardless
+   of month. localeCompare with "ar" so Arabic month names order sensibly. */
+var monthIndex = {};
+for (var mi = 0; mi < MONTHS.length; mi++) monthIndex[MONTHS[mi].value] = mi;
+rows.sort(function (a, b) {
+  if (a.educetionlevel !== b.educetionlevel)
+    return a.educetionlevel < b.educetionlevel ? -1 : 1;
+  if (a.grade !== b.grade) return a.grade < b.grade ? -1 : 1;
+  var am = monthIndex[a.month] == null ? 99 : monthIndex[a.month];
+  var bm = monthIndex[b.month] == null ? 99 : monthIndex[b.month];
+  if (am !== bm) return am - bm;
+  return String(a.unit).localeCompare(String(b.unit), "ar");
+});
+
+var ICON = {
+  video:
+    "M4 5h11a2 2 0 0 1 2 2v2.5l5-3v11l-5-3V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z",
+  trash: "M8 2h8v2h5v2H3V4h5V2Zm-3 6h14l-1 14H6L5 8Zm4 2v10h2V10H9Zm4 0v10h2V10h-2Z",
+  plus: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z",
+  ok: "M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z",
+  bad: "M12 2 1 21h22L12 2Zm0 6 6.5 11h-13L12 8Zm-1 3v4h2v-4h-2Zm0 5v2h2v-2h-2Z",
+  file: "M5 3h11l4 4v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm0 2v14h13V8h-4V5H5Z"
+};
+%>
+
+<% if (ok) { %>
+<p class="flash flash--ok" role="status">
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="<%= ICON.ok %>" />
+  </svg>
+  <%= ok %>
+</p>
+<% } %>
+
+<% if (bad) { %>
+<p class="flash flash--bad" role="alert">
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="<%= ICON.bad %>" />
+  </svg>
+  <%= bad %>
+</p>
+<% } %>
+
+<section class="form-card">
+  <h2 class="form-card__title">إضافة درس</h2>
+  <p class="form-card__lede">
+    الدرس هو أصغر وحدة محتوى. بعد إضافته يصبح متاحًا للربط بواجب أو كويز من
+    صفحتَي «الواجبات» و«الكويزات».
+  </p>
+
+  <%
+  /* action is explicit. enctype is required for the PDF field: without it the
+     browser sends the file name as a plain text value and multer sees no
+     file at all — one of the ways a "lesson added" with a silently missing
+     PDF used to happen. */
+  %>
+  <form method="post" action="/lesson" enctype="multipart/form-data">
+    <% if (tok) { %>
+    <input type="hidden" name="_csrf" value="<%= tok %>" />
+    <% } %>
+
+    <div class="form-grid">
+      <div class="form-field">
+        <label class="label" for="educetionlevel">
+          المادة <abbr title="مطلوب">*</abbr>
+        </label>
+        <select class="select" id="educetionlevel" name="educetionlevel" required>
+          <option value="">اختر المادة…</option>
+          <option value="biology">الأحياء</option>
+          <option value="geology">الجيولوجيا</option>
+        </select>
       </div>
-      <div class="main">
-        <div class="topbar">
-          <div class="toggle">
-            <ion-icon name="menu-outline"></ion-icon>
-          </div>
-        </div>
-        <div class="container1">
-          <div class="admin-Category-form-container">
-            <form enctype="multipart/form-data" method="post">
-              <h3>add details</h3>
 
-             <select name="educetionlevel">
-                <option
-                  name="educetionlevel"
-                  value=""
-                  class="placeholder"
-                  disabled
-                  selected
-                  hidden
-                >
-                Specialization
-                </option>
-                <option name="educetionlevel" value="biology">Biology</option>
-                <option name="educetionlevel" value="geology">Geology</option>
-              </select>
-              <br />
-              <br />
-              <br />
-              <select name="grade">
-                <option
-                  name="grade"
-                  value=""
-                  class="placeholder"
-                  disabled
-                  selected
-                  hidden
-                >
-                  Grade
-                </option>
-                <option name="grade" value="1st">1st</option>
-                <option name="grade" value="2nd">2nd</option>
-                <option name="grade" value="3rd">3rd</option>
-              </select>
+      <div class="form-field">
+        <label class="label" for="grade">
+          الصف <abbr title="مطلوب">*</abbr>
+        </label>
+        <select class="select" id="grade" name="grade" required>
+          <option value="">اختر الصف…</option>
+          <option value="1st">الصف الأول</option>
+          <option value="2nd">الصف الثاني</option>
+          <option value="3rd">الصف الثالث</option>
+        </select>
+      </div>
 
-              <br />
-              <br />
-              <br />
-              <select name="month">
-                <option
-                  name="month"
-                  value=""
-                  class="placeholder"
-                  disabled
-                  selected
-                  hidden
-                >
-                  Month
-                </option>
-                <option name="month" value="الشهر الاول">الشهر الاول</option>
-                <option name="month" value="الشهر الثاني">الشهر الثاني</option>
-                <option name="month" value="الشهر الثالث">الشهر الثالث</option>
-                <option name="month" value="الشهر الرابع">الشهر الرابع</option>
-                <option name="month" value="الشهر الخامس">الشهر الخامس</option>
-                <option name="month" value="الشهر السادس">الشهر السادس</option>
-                <option name="month" value="الشهر السابع">الشهر السابع</option>
-                <option name="month" value="الشهر الثامن">الشهر الثامن</option>
-                <option name="month" value="الشهر التاسع">الشهر التاسع</option>
-                <option name="month" value="الشهر العاشر">الشهر العاشر</option>
+      <div class="form-field">
+        <label class="label" for="month">
+          الشهر <abbr title="مطلوب">*</abbr>
+        </label>
+        <select class="select" id="month" name="month" required>
+          <option value="">اختر الشهر…</option>
+          <optgroup label="الترم الأول">
+            <% for (var a = 0; a < MONTHS.length; a++) { if (MONTHS[a].term === 1) { %>
+            <option value="<%= MONTHS[a].value %>"><%= MONTHS[a].value %></option>
+            <% } } %>
+          </optgroup>
+          <optgroup label="الترم الثاني">
+            <% for (var b = 0; b < MONTHS.length; b++) { if (MONTHS[b].term === 2) { %>
+            <option value="<%= MONTHS[b].value %>"><%= MONTHS[b].value %></option>
+            <% } } %>
+          </optgroup>
+        </select>
+        <p class="field-hint">
+          أول درس في شهر جديد يفتح هذا الشهر تلقائيًا في صفحة الطالب.
+        </p>
+      </div>
 
-                <option name="month" value="الشهر الاول الترم الثاني">الشهر الاول الترم الثاني</option>
-                <option name="month" value="الشهر الثاني الترم الثاني">الشهر الثاني الترم الثاني</option>
-                <option name="month" value="الشهر الثالث الترم الثاني">الشهر الثالث الترم الثاني</option>
-                <option name="month" value="الشهر الرابع الترم الثاني">الشهر الرابع الترم الثاني</option>
-                <option name="month" value="الشهر الخامس الترم الثاني">الشهر الخامس الترم الثاني</option>
-                <option name="month" value="الشهر السادس الترم الثاني">الشهر السادس الترم الثاني</option>
-                <option name="month" value="الشهر السابع الترم الثاني">الشهر السابع الترم الثاني</option>
-                <option name="month" value="الشهر الثامن الترم الثاني">الشهر الثامن الترم الثاني</option>
-                <option name="month" value="الشهر التاسع الترم الثاني">الشهر التاسع الترم الثاني</option>
-                <option name="month" value="الشهر العاشر الترم الثاني">الشهر العاشر الترم الثاني</option>
-              </select>
-              <br />
-              <br />
-              <br />
-              <input
-                type="text"
-                placeholder="enter lesson"
-                class="box"
-                name="unit"
-              />
-              <input
-                type="text"
-                placeholder="enter link video"
-                name="lesson"
-                class="box"
-              />
-              <input type="file" name="pdf" class="box" />
-              <input type="submit" class="btn" value="add lesson" />
-            </form>
-          </div>
+      <div class="form-field">
+        <label class="label" for="unit">
+          اسم الدرس <abbr title="مطلوب">*</abbr>
+        </label>
+        <input
+          class="input"
+          type="text"
+          id="unit"
+          name="unit"
+          required
+          maxlength="120"
+          autocomplete="off"
+          placeholder="مثال: الوحدة الأولى — الخلية"
+        />
+        <p class="field-hint">
+          هذا الاسم هو ما يظهر للطالب وما يُربط به الواجب والكويز، فاجعله مميزًا
+          داخل الشهر نفسه.
+        </p>
+      </div>
 
-          <div class="Category-display">
-            <table class="Category-display-table">
-              <thead>
-                <tr>
-                  <th>level</th>
-                  <th>grade</th>
-                  <th>month</th>
-                  <th>unit</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <%for(i of lesson){%> <%for(j of i.units){%>
-              <tr>
-                <td><%=i.educetionlevel%></td>
-                <td><%=i.grade%></td>
-                <td><%=j.month%></td>
-                <td><%=j.unit%></td>
-                <td>
-                  <a
-                    style="
-                      background-color: brown;
-                      border-radius: 0.5rem;
-                      padding: 0.5rem 0.5rem;
-                      color: var(--white);
-                    "
-                    href="/removelesson/<%=i._id%>/<%=j._id%>"
-                    >delete</a
-                  >
-                </td>
-              </tr>
-              <%}%> <%}%>
-            </table>
-          </div>
-        </div>
+      <div class="form-field">
+        <label class="label" for="lessonLink">رابط الفيديو</label>
+        <%
+        /* dir="ltr" and the --ltr modifier: a URL is a Latin run and renders
+           with its slashes in the wrong places inside an RTL line. type="url"
+           gets the right keyboard on mobile and a free format check. */
+        %>
+        <input
+          class="input input--ltr"
+          type="url"
+          id="lessonLink"
+          name="lesson"
+          dir="ltr"
+          inputmode="url"
+          placeholder="https://…"
+          autocomplete="off"
+        />
+        <p class="field-hint">رابط المشاهدة (Streamable أو YouTube).</p>
+      </div>
+
+      <div class="form-field">
+        <label class="label" for="pdf">ملف PDF</label>
+        <input class="input" type="file" id="pdf" name="pdf" accept=".pdf,application/pdf" />
+        <p class="field-hint">اختياري. PDF فقط، بحد أقصى ١٠ ميجابايت.</p>
       </div>
     </div>
 
-    <script src="../admin/dashboard/assets/js/main.js"></script>
-    <script
-      type="module"
-      src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"
-    ></script>
-    <script
-      nomodule
-      src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"
-    ></script>
-  </body>
-</html>
+    <div class="form-actions">
+      <button class="btn" type="submit">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="<%= ICON.plus %>" />
+        </svg>
+        إضافة الدرس
+      </button>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel__head">
+    <h2 class="panel__title">الدروس المضافة</h2>
+    <span class="pager__count">
+      <span class="num" dir="ltr"><%= rows.length %></span> درس
+    </span>
+  </div>
+
+  <% if (!rows.length) { %>
+  <div class="empty-state">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="<%= ICON.video %>" />
+    </svg>
+    <p class="empty-state__title">لا توجد دروس بعد</p>
+    <p>أضف أول درس من النموذج أعلاه؛ الواجبات والكويزات تُربط بالدروس.</p>
+  </div>
+
+  <% } else { %>
+  <div class="table-scroll">
+    <table class="table">
+      <caption class="sr-only">
+        الدروس المضافة، مع المادة والصف والشهر وما هو مرتبط بكل درس
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">المادة</th>
+          <th scope="col">الصف</th>
+          <th scope="col">الشهر</th>
+          <th scope="col">الدرس</th>
+          <th scope="col">المحتوى</th>
+          <th scope="col">مرتبط به</th>
+          <th scope="col">إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (var r = 0; r < rows.length; r++) { var it = rows[r]; %>
+        <tr>
+          <td><%= SUBJECTS[it.educetionlevel] || it.educetionlevel || "—" %></td>
+
+          <td>
+            <% if (it.grade) { %>
+            <span class="tag"><%= GRADES[it.grade] || it.grade %></span>
+            <% } else { %>—<% } %>
+          </td>
+
+          <td><%= it.month || "—" %></td>
+
+          <td class="table__name"><%= it.unit || "—" %></td>
+
+          <td>
+            <div class="row-actions">
+              <% if (it.video) { %>
+              <%
+              /* rel="noopener noreferrer" because target="_blank" without it
+                 hands the opened page a window.opener handle back into the
+                 admin session. */
+              %>
+              <a
+                class="btn btn--ghost btn--sm"
+                href="<%= it.video %>"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="<%= ICON.video %>" />
+                </svg>
+                فيديو
+              </a>
+              <% } %>
+
+              <% if (it.pdf) { %>
+              <a
+                class="btn btn--ghost btn--sm"
+                href="/<%= it.pdf %>"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="<%= ICON.file %>" />
+                </svg>
+                PDF
+              </a>
+              <% } %>
+
+              <% if (!it.video && !it.pdf) { %>—<% } %>
+            </div>
+          </td>
+
+          <td>
+            <%
+            /* Shows the cascade consequence up front: deleting this row also
+               deletes whatever is listed here. The old page gave no hint that
+               a unit had a paper attached, and deleting it orphaned the paper
+               with no way to reach it again. */
+            %>
+            <% if (it.hasQuiz) { %><span class="badge">كويز</span><% } %>
+            <% if (it.hasHome) { %><span class="badge">واجب</span><% } %>
+            <% if (!it.hasQuiz && !it.hasHome) { %>—<% } %>
+          </td>
+
+          <td>
+            <%
+            var warn = "هل تريد حذف درس «" + (it.unit || "بدون اسم") + "»؟";
+            if (it.hasQuiz && it.hasHome) {
+              warn += " سيُحذف معه الكويز والواجب المرتبطان به.";
+            } else if (it.hasQuiz) {
+              warn += " سيُحذف معه الكويز المرتبط به.";
+            } else if (it.hasHome) {
+              warn += " سيُحذف معه الواجب المرتبط به.";
+            }
+            %>
+            <form
+              method="post"
+              action="/removelesson/<%= it.docId %>/<%= it.rowId %>"
+              data-confirm="<%= warn %>"
+            >
+              <% if (tok) { %>
+              <input type="hidden" name="_csrf" value="<%= tok %>" />
+              <% } %>
+              <button class="btn btn--danger btn--sm" type="submit">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="<%= ICON.trash %>" />
+                </svg>
+                حذف
+              </button>
+            </form>
+          </td>
+        </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+  <% } %>
+</section>
+
+<%- include("_foot") %>

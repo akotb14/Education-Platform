@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#fe3f40" />
+
+    <%
+      /* =====================================================================
+         SHARED INTRO PAGE — replaces views/startQuiz.ejs, views/quiz/
+         startQuiz.ejs and views/homework/startQuiz.ejs.
+
+         Those three files were byte-identical apart from one line of English
+         rules text. Each was a copy of the same CodingNepal demo template,
+         complete with three <!DOCTYPE html> declarations and two entire
+         concatenated documents (the first an empty <title>Document</title>
+         stub), lang="en", and the title "Awesome Quiz App | Programminf
+         w/Shadab". They are left on disk, unreferenced, so reverting is a
+         one-line change in each route.
+
+         Rendered by:
+           routes/exam.router.js      GET /startQuiz/:nameQuiz   kind "exam"
+           routes/quiz.router.js      GET /quiz/:name            kind "quiz"
+           routes/homework.router.js  GET /homework/:name        kind "homework"
+
+         LOCALS
+           kind         "quiz" | "exam" | "homework"
+           paper        the quiz document, or null when it could not be loaded
+           alreadyTaken truthy when this student has already submitted
+           backHref     where the exit link goes
+
+         Every local is read through a typeof guard. Under EJS's `with(locals)`
+         an unguarded reference to a key that was never passed is a
+         ReferenceError, which turns the route into a 500 the moment it reaches
+         real markup — so the guards are what let all three callers share one
+         file even if one of them is later changed to pass less. */
+
+      var kindRaw = typeof kind !== "undefined" && kind ? String(kind) : "quiz";
+
+      var KINDS = {
+        quiz:     { label: "كويز",  a: "الكويز",   verb: "ابدأ الكويز" },
+        exam:     { label: "امتحان", a: "الامتحان", verb: "ابدأ الامتحان" },
+        homework: { label: "واجب",  a: "الواجب",   verb: "ابدأ حل الواجب" }
+      };
+      /* Whitelisted: an unknown kind falls back rather than printing itself. */
+      var K = KINDS[kindRaw] || KINDS.quiz;
+
+      var doc = (typeof paper !== "undefined" && paper && typeof paper === "object") ? paper : null;
+      var title = doc && doc.nameQuiz ? String(doc.nameQuiz) : "";
+      var questions = doc && Array.isArray(doc.quiz) ? doc.quiz : [];
+
+      var taken = typeof alreadyTaken !== "undefined" && !!alreadyTaken;
+      var exitHref = typeof backHref !== "undefined" && backHref ? String(backHref) : "/";
+
+      /* quizTime is stored as "HH:MM" and read back by the routes with
+         split(":") — see routes/quiz.router.js. Homework is untimed, and the
+         old page told every student "5 Minutes per each question" regardless,
+         which was true of none of the three. */
+      var timeText = "";
+      if (kindRaw !== "homework" && doc && doc.quizTime) {
+        var parts = String(doc.quizTime).split(":");
+        var hh = parseInt(parts[0], 10) || 0;
+        var mm = parseInt(parts[1], 10) || 0;
+        if (hh > 0) timeText += hh + (hh === 1 ? " ساعة" : hh === 2 ? " ساعتان" : " ساعات");
+        if (hh > 0 && mm > 0) timeText += " و";
+        if (mm > 0) timeText += mm + " دقيقة";
+      }
+    %>
+
+    <meta name="robots" content="noindex, nofollow" />
+    <meta
+      name="description"
+      content="<%= title || K.a %> — منصة أ/ مرڤت عبدالرحمن."
+    />
+
+    <title>
+      <%= title ? title + " — " : "" %><%= K.a %> | منصة أ/ مرڤت عبدالرحمن
+    </title>
+
+    <link rel="icon" type="image/png" href="/assets/images/logo.png" />
+
+    <!-- Set before the stylesheets so .reveal elements never flash visible.
+         CSS keeps content visible unless this class is present, so a JS
+         failure leaves a readable page rather than a blank one. -->
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="/assets/css/tokens.css" />
+    <link rel="stylesheet" href="/assets/css/home.css" />
+    <link rel="stylesheet" href="/assets/css/listing.css" />
+    <link rel="stylesheet" href="/assets/css/quiz.css" />
+
+    <script src="/assets/js/home.js" defer></script>
+  </head>
+
+  <body oncontextmenu="return false;">
+    <a class="sr-only" href="#main">تخطي إلى المحتوى</a>
+
+    <div class="scroll-progress" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="container site-header__inner">
+        <a class="site-logo" href="/">
+          <img
+            src="/assets/images/logo.png"
+            alt="منصة أ/ مرڤت عبدالرحمن"
+            width="960"
+            height="960"
+          />
+        </a>
+
+        <button
+          class="nav-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="site-nav"
+        >
+          <span class="sr-only">القائمة</span>
+          <span class="nav-toggle__bars" aria-hidden="true"></span>
+        </button>
+
+        <nav class="site-nav" id="site-nav" aria-label="التنقل الرئيسي">
+          <ul class="site-nav__list">
+            <li><a class="site-nav__link" href="/#courses">الصفوف</a></li>
+            <li><a class="site-nav__link" href="/#activities">الاختبارات</a></li>
+            <li><a class="site-nav__link" href="/#contact">تواصل</a></li>
+            <li>
+              <a
+                class="site-nav__link site-nav__link--cta"
+                href="/logout"
+                data-magnetic
+              >
+                تسجيل الخروج
+              </a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="page-hero">
+        <div class="container page-hero__inner">
+          <nav class="crumbs" aria-label="مسار التصفح">
+            <ol class="crumbs__list">
+              <li><a href="/">الرئيسية</a></li>
+              <li class="crumbs__sep" aria-hidden="true">/</li>
+              <li><a href="<%= exitHref %>">العودة</a></li>
+              <li class="crumbs__sep" aria-hidden="true">/</li>
+              <li><span aria-current="page"><%= K.a %></span></li>
+            </ol>
+          </nav>
+
+          <!-- The old page's only heading was the English "Some Rules of this
+               Exercise" inside a <span>, so the page had no h1 at all. -->
+          <h1 class="page-hero__title">
+            <% if (title) { %><em><%= title %></em><% } else { %>
+            <em><%= K.a %></em><% } %>
+          </h1>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="container">
+          <% if (!doc) { %>
+          <!-- Reached when the record could not be loaded: a stale link, or an
+               exam outside its start/end window. The exam route answered a
+               bare 404 status page for this, with no way back. -->
+          <div class="empty">
+            <span class="empty__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z" />
+              </svg>
+            </span>
+            <h2 class="empty__title">هذا <%= K.a %> غير متاح</h2>
+            <p class="empty__text">
+              ربما تم حذفه أو انتهى موعده أو تغيّر الرابط. ارجع واختر من جديد.
+            </p>
+            <div class="empty__actions">
+              <a class="btn btn--primary" href="<%= exitHref %>" data-magnetic>
+                العودة
+              </a>
+            </div>
+          </div>
+
+          <% } else if (taken) { %>
+          <!-- Previously this case was only caught on POST, which answered the
+               raw string "<h1>you cant entered quiz agian </h1>" with a 400 —
+               English, unstyled, and with no way back to the platform. -->
+          <div class="empty">
+            <span class="empty__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z" />
+              </svg>
+            </span>
+            <h2 class="empty__title">لقد قمت بحل <%= K.a %> بالفعل</h2>
+            <p class="empty__text">
+              يُسمح بمحاولة واحدة فقط، ولا يمكن الدخول مرة أخرى.
+            </p>
+            <div class="empty__actions">
+              <a class="btn btn--primary" href="<%= exitHref %>" data-magnetic>
+                العودة
+              </a>
+            </div>
+          </div>
+
+          <% } else { %>
+          <div class="intro reveal">
+            <div class="intro__card">
+              <div class="intro__head">
+                <span class="intro__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M5 3h11l4 4v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm2 6v2h10V9H7Zm0 4v2h10v-2H7Zm0 4v2h6v-2H7Z" />
+                  </svg>
+                </span>
+                <span class="intro__titles">
+                  <span class="intro__kind"><%= K.label %></span>
+                  <span class="intro__title"><%= title || K.a %></span>
+                </span>
+              </div>
+
+              <div class="intro__body">
+                <ul class="intro__facts">
+                  <li class="intro__fact">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M4 6h16v2H4V6Zm0 5h16v2H4v-2Zm0 5h10v2H4v-2Z" />
+                    </svg>
+                    <span>
+                      <span class="intro__fact-label">عدد الأسئلة</span>
+                      <span class="intro__fact-value">
+                        <span class="num"><%= questions.length %></span> سؤال
+                      </span>
+                    </span>
+                  </li>
+                  <li class="intro__fact">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 10.6V6h-2v7.4l5.2 3.1 1-1.7-4.2-2.2Z" />
+                    </svg>
+                    <span>
+                      <span class="intro__fact-label">المدة</span>
+                      <span class="intro__fact-value">
+                        <% if (timeText) { %><%= timeText %><% } else { %>بدون
+                        وقت محدد<% } %>
+                      </span>
+                    </span>
+                  </li>
+                </ul>
+
+                <!-- Generated from the record instead of the four hard-coded
+                     English lines the template shipped with. -->
+                <h2 class="sr-only">التعليمات</h2>
+                <ol class="intro__rules">
+                  <li>
+                    <strong>محاولة واحدة فقط.</strong> بمجرد الضغط على
+                    «<%= K.verb %>» تُحتسب المحاولة ولا يمكن إعادتها.
+                  </li>
+                  <% if (timeText) { %>
+                  <li>
+                    مدة <%= K.a %> <strong><%= timeText %></strong> تبدأ من لحظة
+                    الضغط على الزر، ويتم تسليم إجاباتك تلقائيًا عند انتهاء الوقت.
+                  </li>
+                  <% } %>
+                  <li>
+                    كل الأسئلة في صفحة واحدة، ويمكنك مراجعة إجاباتك قبل التسليم.
+                  </li>
+                  <li>
+                    لا تُحفظ الإجابات إلا بعد الضغط على زر التسليم، لذلك
+                    <strong>لا تغلق الصفحة قبل التسليم</strong>.
+                  </li>
+                </ol>
+
+                <div class="intro__actions">
+                  <!-- Posts to this same URL. The hidden-in-plain-sight
+                       contract is the button's name/value: every one of the
+                       three routes gates on `req.body.btn == "continue"` and
+                       silently does nothing without it. -->
+                  <form method="post">
+                    <button
+                      class="btn btn--primary"
+                      type="submit"
+                      name="btn"
+                      value="continue"
+                      data-magnetic
+                    >
+                      <%= K.verb %>
+                    </button>
+                  </form>
+                  <a class="btn btn--ghost" href="<%= exitHref %>">
+                    <span aria-hidden="true">←</span> العودة
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+          <% } %>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>
+          © <span class="num">2026</span> جميع الحقوق محفوظة — منصة أ/ مرڤت
+          عبدالرحمن.
+          <br />Developed By:
+          <a
+            rel="nofollow noopener"
+            href="https://www.facebook.com/profile.php?id=100011225383830"
+            >Abdelrahman</a
+          >
+          &amp;
+          <a rel="nofollow noopener" href="https://www.facebook.com/ahmed11mahomed"
+            >Kotb</a
+          >
+        </p>
+      </div>
+    </footer>
+
+    <script>
+      document.onkeydown = function (e) {
+        if (e.keyCode == 123) {
+          return false;
+        }
+        if (e.ctrlKey && e.shiftKey && e.keyCode == "I".charCodeAt(0)) {
+          return false;
+        }
+        if (e.ctrlKey && e.shiftKey && e.keyCode == "J".charCodeAt(0)) {
+          return false;
+        }
+        if (e.ctrlKey && e.keyCode == "U".charCodeAt(0)) {
+          return false;
+        }
+      };
+    </script>
+  </body>
+</html>

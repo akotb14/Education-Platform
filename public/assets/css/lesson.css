@@ -1,0 +1,225 @@
+/*
+  Lesson viewer — used by lesson.ejs (/content/:edu/:grade/:month/:id).
+
+  LAYERS ON TOP OF home.css AND listing.css. Load order in the view is
+  tokens.css -> home.css -> listing.css -> lesson.css.
+
+  The page reuses .site-header, .site-nav, .container, .section, .card,
+  .btn, .reveal, .to-top and .site-footer from home.css, and .page-hero,
+  .crumbs, .chip, .meta-row, .num, .empty and .notice from listing.css. The
+  only genuinely new things here are the video player and the resource cards,
+  so those are all this file contains.
+
+  Breakpoints follow the canonical set documented in tokens.css:
+      sm 560px  ·  md 768px  ·  lg 992px  ·  xl 1200px
+*/
+
+/* ---------------------------------------------------------------- player ---
+   The old markup hard-coded a 640x480 iframe inside a 640x480 wrapper, so on
+   a 360px phone the video overflowed the viewport by ~280px and took the
+   whole page into horizontal scroll. aspect-ratio lets it be fluid, and
+   removes the absolutely-positioned padding-bottom hack along with it — so
+   there is no left/right offset left to mirror in RTL. */
+.player {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  inline-size: 100%;
+  overflow: hidden;
+  background: #000;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+}
+
+.player iframe {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  border: 0;
+  display: block;
+}
+
+/* Drive's preview chrome sits at the top-right of the frame and carries the
+   "open in new window" and download controls. The original page covered it
+   with an 80x80 transparent div; that behaviour is kept verbatim.
+
+   PHYSICAL top/right on purpose — this tracks Google's own iframe chrome,
+   which is laid out by Drive and does not follow this page's dir="rtl".
+   Logical inset-inline-end would move the guard to the left in RTL and stop
+   covering anything. This is the one place in the redesign where a physical
+   direction is the correct choice.
+
+   Not a security control: it hides a convenience button, and anyone reading
+   the HTML still has the file id. It is a speed bump, and is kept only
+   because it was already there. */
+.player__guard {
+  position: absolute;
+  top: 0;
+  right: 0;
+  inline-size: 80px;
+  block-size: 80px;
+  opacity: 0;
+  /* Was implicit before; stated so the intent survives the next edit. */
+  pointer-events: auto;
+  z-index: 1;
+}
+
+/* Shown instead of the frame when a unit row has no Drive file id. Previously
+   the iframe was rendered anyway with an empty src, so Drive answered its own
+   "Sorry, the file you have requested does not exist" page inside the
+   student's lesson. */
+.player--empty {
+  display: grid;
+  place-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-6);
+  text-align: center;
+  color: var(--c-muted);
+  background: var(--c-surface-alt);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.player--empty svg {
+  inline-size: 44px;
+  block-size: 44px;
+  color: var(--c-line);
+}
+
+/* ------------------------------------------------------------- resources ---
+   Homework / quiz / PDF. These were three links buried inside <h1><p> pairs
+   (invalid nesting — the parser closes the h1 before the p opens), rendered
+   as bare inline text with no affordance. */
+.res-grid {
+  display: grid;
+  gap: var(--sp-4);
+  grid-template-columns: 1fr;
+  margin-block-start: var(--sp-6);
+}
+
+@media (min-width: 560px) {
+  .res-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 992px) {
+  .res-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Built on .card, so it inherits the tilt, spotlight, hover lift and
+   reduced-motion handling already defined in home.css. .card sets
+   flex-direction: column for media-over-body tiles; this one is a row, so the
+   direction is restated rather than left to source order. */
+.res-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  text-decoration: none;
+}
+
+.res-card__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 52px;
+  block-size: 52px;
+  border-radius: var(--r-md);
+  color: var(--c-primary);
+  background: var(--c-primary-tint);
+}
+
+.res-card__icon svg {
+  inline-size: 26px;
+  block-size: 26px;
+}
+
+.res-card--quiz .res-card__icon {
+  color: #0b6fa4;
+  background: var(--c-accent-tint);
+}
+
+.res-card--pdf .res-card__icon {
+  color: var(--c-muted);
+  background: var(--c-surface-alt);
+}
+
+.res-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.res-card__title {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--c-ink);
+  margin: 0;
+}
+
+.res-card__hint {
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
+  margin: 0;
+  /* A PDF filename is a Latin run inside an RTL line; isolate it so the
+     timestamp prefix multer adds cannot reorder around the extension. */
+  unicode-bidi: isolate;
+  overflow-wrap: anywhere;
+}
+
+/* The arrow is a separate flex item pinned to the reading end. */
+.res-card__go {
+  margin-inline-start: auto;
+  flex: none;
+  font-size: var(--fs-lg);
+  color: var(--c-primary);
+  transition: transform var(--dur-1) var(--ease);
+}
+
+/* Nudges toward the reading direction. translateX does not auto-flip, so RTL
+   gets the negative value and LTR overrides it below. */
+@media (hover: hover) and (pointer: fine) {
+  .res-card:hover .res-card__go {
+    transform: translateX(-4px);
+  }
+}
+
+[dir="ltr"] .res-card:hover .res-card__go {
+  transform: translateX(4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .res-card:hover .res-card__go,
+  [dir="ltr"] .res-card:hover .res-card__go {
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------ back link ---- */
+.lesson-back {
+  display: flex;
+  justify-content: center;
+  margin-block-start: var(--sp-8);
+}
+
+/* --------------------------------------------------------- reveal stagger --
+   home.js adds .is-visible; home.css owns the transition. */
+.js .res-grid .reveal:nth-child(2) {
+  transition-delay: 80ms;
+}
+.js .res-grid .reveal:nth-child(3) {
+  transition-delay: 160ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js .res-grid .reveal {
+    transition-delay: 0ms !important;
+  }
+}

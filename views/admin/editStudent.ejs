@@ -1,291 +1,295 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Category</title>
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
-    />
-    <link rel="stylesheet" href="../admin/dashboard/assets/css/style.css" />
-    <link rel="stylesheet" href="../admin/signup/style.css" />
-  </head>
-  <body>
-    <!-- =============== Navigation ================ -->
-    <div class="container">
-      <div class="navigation">
-        <ul>
-          <li>
-            <a href="#" class="nav">
-              <span class="icon">
-                <img src="/logo2.png" alt="" />
-              </span>
-              <span class="title">The Quen Platform</span>
-            </a>
-          </li>
+<%- include("_head", { active: "students", title: "تعديل بيانات طالب" }) %>
+<%
+/* =========================================================================
+   EDIT STUDENT
 
-          <li>
-            <a href="/" class="nav">
-              <span class="icon">
-                <ion-icon name="home-outline"></ion-icon>
-              </span>
-              <span class="title">go to home</span>
-            </a>
-          </li>
-          <li>
-            <a href="/dashboard" class="nav">
-              <span class="icon">
-                <ion-icon name="home-outline"></ion-icon>
-              </span>
-              <span class="title">Dashboard</span>
-            </a>
-          </li>
-          <li>
-            <a href="/student" class="nav">
-              <span class="icon">
-                <ion-icon name="people-outline"></ion-icon>
-              </span>
-              <span class="title">Students</span>
-            </a>
-          </li>
-          <li>
-            <a href="/admin/studentOnline" class="nav">
-              <span class="icon">
-                <ion-icon name="people-outline"></ion-icon>
-              </span>
-              <span class="title">studentOnline</span>
-            </a>
-          </li>
-          <li>
-            <a href="/lesson" class="nav">
-              <span class="icon">
-                <ion-icon name="videocam-outline"></ion-icon>
-              </span>
-              <span class="title">Lessons</span>
-            </a>
-          </li>
-          <li>
-            <a href="/admin/homework" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">Homework</span>
-            </a>
-          </li>
-          <li>
-            <a href="/showStudentsDegree/homework" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">show Homework Degree</span>
-            </a>
-          </li>
+   WHAT THE OLD PAGE DID — four real bugs, not just styling:
 
-          <li>
-            <a href="/admin/quiz" class="nav">
-              <span class="icon">
-                <ion-icon name="clipboard-outline"></ion-icon>
-              </span>
-              <span class="title">Quiz</span>
-            </a>
-          </li>
-          <li>
-            <a href="/showStudentsDegree/quiz" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">show Quiz Degree</span>
-            </a>
-          </li>
-          <li>
-            <a href="/admin/exam" class="nav">
-              <span class="icon">
-                <ion-icon name="book-outline"></ion-icon>
-              </span>
-              <span class="title">Exam</span>
-            </a>
-          </li>
-          <li>
-            <a href="/showStudentsDegree/exam" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">show Exam Degree</span>
-            </a>
-          </li>
-         
-          <li>
-            <a href="/sign" class="nav">
-              <button class="signout nav">
-                <span class="icon">
-                  <ion-icon name="log-in-outline"></ion-icon>
-                </span>
-                <span class="title">Add Student</span>
-              </button>
-            </a>
-          </li>
-          
-        </ul>
+   1. `student.month.includes(i.month)` with NO guard. `month` is `[Array]` in
+      the schema with no default, so it is undefined on every student created
+      through /sign (postInfo never sets it). Opening the edit page for such a
+      student threw "Cannot read properties of undefined (reading 'includes')"
+      inside the template — a 500, and because res.render errors bypass the
+      route's own try/catch, the route's `res.sendStatus(400)` never ran.
+
+   2. A trailing `<input type="hidden" name="month" value="" />` AFTER the
+      checkboxes. It always submits, so `req.body.month` is either the string
+      "" (no boxes ticked) or an array whose last element is "". The update
+      then wrote that empty string into the month array on every single save.
+      Removed — the "no months selected" case is handled by the route reading
+      an absent field as [], which is what an unchecked checkbox group means.
+
+   3. Every <select> carried a hidden placeholder <option> holding the CURRENT
+      value, plus a fixed list of real options. Because the placeholder was
+      `selected hidden`, the closed control rendered blank-ish and none of the
+      real options was ever marked selected — so the admin could not see the
+      student's current grade/group/level without opening the dropdown, and
+      re-saving without touching it re-submitted the placeholder. Now the real
+      matching option is marked selected and there is no placeholder at all.
+
+   4. Duplicate `id="month"` on every checkbox, and every label pointed at
+      `for="scales"` — an element that does not exist on the page. Clicking a
+      month label toggled nothing. Each checkbox now has a unique id.
+
+   Also: `<h3>Edit student</h3>` was the only heading and the page <title> was
+   "Category", left over from the template it was copied from.
+
+   LOCALS
+     student    Object  the record being edited (required)
+     month      Array   [{ month }] available months for this level+grade
+     csrfToken  String  from csurf
+   ====================================================================== */
+
+var st = typeof student !== "undefined" && student ? student : {};
+
+/* `month` the local (available months) vs `st.month` the field (the student's
+   chosen months) — the old template used the same identifier for both, which
+   is how bug #1 stayed invisible. Renamed here. */
+var available =
+  typeof month !== "undefined" && Array.isArray(month) ? month : [];
+
+/* The guard bug #1 needed. Mongoose declares `month` as [Array], so a stored
+   value can be an array of arrays; flatten one level and drop empties (the
+   phantom hidden input above wrote "" into existing records, so real data in
+   the DB already contains them). */
+var chosen = [];
+if (Array.isArray(st.month)) {
+  for (var m = 0; m < st.month.length; m++) {
+    var v = st.month[m];
+    if (Array.isArray(v)) {
+      for (var k = 0; k < v.length; k++) {
+        if (v[k]) chosen.push(String(v[k]));
+      }
+    } else if (v) {
+      chosen.push(String(v));
+    }
+  }
+}
+var isChosen = function (name) {
+  return chosen.indexOf(String(name)) !== -1;
+};
+
+var token = typeof csrfToken !== "undefined" && csrfToken ? csrfToken : "";
+
+/* Values are the English keys the DB stores and every filter matches on.
+   NOTE the other admin views (addbank, editexam, edithomework) offer
+   Secondary/Preparatory for this same field — a value the create-side filters
+   can never match. This page keeps biology/geology, which is what /sign
+   writes and what the student-facing queries look for. */
+var LEVELS = [
+  { value: "biology", label: "الأحياء" },
+  { value: "geology", label: "الجيولوجيا" }
+];
+var GRADES = [
+  { value: "1st", label: "الصف الأول" },
+  { value: "2nd", label: "الصف الثاني" },
+  { value: "3rd", label: "الصف الثالث" }
+];
+var GROUPS = [
+  { value: "OnlineStudent", label: "أونلاين" },
+  { value: "Saturday", label: "السبت" },
+  { value: "Sunday", label: "الأحد" },
+  { value: "Monday", label: "الاثنين" },
+  { value: "Tuesday", label: "الثلاثاء" },
+  { value: "Wednesday", label: "الأربعاء" },
+  { value: "Thursday", label: "الخميس" },
+  { value: "Friday", label: "الجمعة" }
+];
+var ROLES = [
+  { value: "false", label: "طالب" },
+  { value: "true", label: "مشرف" }
+];
+
+/* admin is a String in the schema, and is absent on older records. Treat
+   anything that is not the literal "true" as a student. */
+var curRole = st.admin === "true" ? "true" : "false";
+
+var ICON = {
+  save: "M5 3h11l4 4v14H5V3Zm2 2v4h8V5H7Zm5 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z",
+  back: "M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5v-2H5V5h5V3Zm4.5 3.5L13 8l3 3H8v2h8l-3 3 1.5 1.5L20 12l-5.5-5.5Z"
+};
+%>
+
+<a class="btn btn--ghost" href="/student" style="margin-block-end: var(--sp-5)">
+  <span aria-hidden="true">→</span>
+  رجوع إلى قائمة الطلاب
+</a>
+
+<div class="form-card">
+  <form method="post" action="/editStudent/<%= st._id %>">
+    <input type="hidden" name="_csrf" value="<%= token %>" />
+
+    <h2 class="panel__title" style="margin-block-end: var(--sp-5)">
+      <%= st.fullName ? "تعديل بيانات " + st.fullName : "تعديل بيانات طالب" %>
+    </h2>
+
+    <div class="form-grid">
+      <div class="form-field form-grid__full">
+        <label class="label" for="fullName">الاسم الكامل</label>
+        <input
+          class="input"
+          type="text"
+          id="fullName"
+          name="fullName"
+          value="<%= st.fullName || "" %>"
+          required
+          autocomplete="name"
+        />
       </div>
 
-      <div class="main">
-        <div class="topbar">
-          <div class="toggle">
-            <ion-icon name="menu-outline"></ion-icon>
-          </div>
-        </div>
-        <div class="container1">
-          <div class="admin-Category-form-container">
-            <form method="post">
-              <input type="hidden" name="_csrf" value="<%=csrfToken%>" />
-              <h3>Edit student</h3>
-              <input
-                type="text"
-                placeholder="fullName"
-                value="<%=student.fullName%>"
-                name="fullName"
-                class="box"
-              />
-           
-              
-              <input
-                type="text"
-                placeholder="cardNumber"
-                value="<%=student.cardNumber%>"
+      <div class="form-field">
+        <label class="label" for="cardNumber">رقم الكارت</label>
+        <input
+          class="input input--ltr"
+          type="text"
+          id="cardNumber"
+          name="cardNumber"
+          value="<%= st.cardNumber || "" %>"
+          inputmode="numeric"
+          autocomplete="off"
+        />
+        <span class="field-hint">يجب أن يكون غير مكرر بين الطلاب.</span>
+      </div>
 
-                name="cardNumber"
-                class="box"
-              />
-             
-              
-              <input
-                type="text"
-                value="<%=student.phoneNumber%>"
+      <div class="form-field">
+        <label class="label" for="phoneNumber">رقم الهاتف</label>
+        <input
+          class="input input--ltr"
+          type="tel"
+          id="phoneNumber"
+          name="phoneNumber"
+          value="<%= st.phoneNumber || "" %>"
+          inputmode="tel"
+          autocomplete="tel"
+        />
+        <span class="field-hint">هو ما يسجّل به الطالب دخوله.</span>
+      </div>
 
-                placeholder="phoneNumber"
-                name="phoneNumber"
-                class="box"
-              />
-             
-              
-              <br />
-              <br />
-              <select name="educetionlevel" id="educetionlevel">
-                <option
-                  name="educetionlevel"
-                  value="<%=student.educetionlevel%>"
-                  class="placeholder"
-                  
-                  selected
-                  hidden
-                >
-                <%=(student.educetionlevel == undefined) ? "Educationlevel":student.educetionlevel%>
-                </option>
-                <option name="educetionlevel" value="biology">Biology</option>
-                <option name="educetionlevel" value="geology">Geology</option>
-              </select>
-              <br />
-              <br />
-              <select name="grade" id="grade">
-                <option
-                  name="grade"
-                  value="<%=student.grade%>"
-                  class="placeholder"
-                  
-                  selected
-                  hidden
-                >
-                <%=(student.grade == undefined) ? "Grade":student.grade%>
+      <div class="form-field">
+        <label class="label" for="educetionlevel">المادة</label>
+        <select class="select" id="educetionlevel" name="educetionlevel">
+          <option value="">— غير محددة —</option>
+          <% for (var l = 0; l < LEVELS.length; l++) { %>
+          <option
+            value="<%= LEVELS[l].value %>"
+            <%= st.educetionlevel === LEVELS[l].value ? " selected" : "" %>
+          >
+            <%= LEVELS[l].label %>
+          </option>
+          <% } %>
+          <%
+          /* A record holding a value outside this list (e.g. "Secondary",
+             written by one of the other admin views) would otherwise be
+             silently rewritten to "" on the next save. Surface it instead. */
+          var known = false;
+          for (var lk = 0; lk < LEVELS.length; lk++) {
+            if (LEVELS[lk].value === st.educetionlevel) known = true;
+          }
+          if (st.educetionlevel && !known) { %>
+          <option value="<%= st.educetionlevel %>" selected>
+            <%= st.educetionlevel %> (قيمة غير معروفة)
+          </option>
+          <% } %>
+        </select>
+      </div>
 
-                </option>
-                <option name="grade" value="1st">1st</option>
-                <option name="grade" value="2nd">2nd</option>
-                <option name="grade" value="3rd">3rd</option>
-              </select>
+      <div class="form-field">
+        <label class="label" for="grade">الصف</label>
+        <select class="select" id="grade" name="grade">
+          <option value="">— غير محدد —</option>
+          <% for (var gr = 0; gr < GRADES.length; gr++) { %>
+          <option
+            value="<%= GRADES[gr].value %>"
+            <%= st.grade === GRADES[gr].value ? " selected" : "" %>
+          >
+            <%= GRADES[gr].label %>
+          </option>
+          <% } %>
+        </select>
+      </div>
 
-              <br />
-              <br />
-              <select name="group" id="group">
-                <option
-                  name="group"
-                  value="<%=student.group%>"
-                  class="placeholder"
-                  
-                  selected
-                  hidden
-                >
-                <%=(student.group == undefined) ? "Group":student.group%>
+      <div class="form-field">
+        <label class="label" for="group">المجموعة</label>
+        <select class="select" id="group" name="group">
+          <option value="">— غير محددة —</option>
+          <% for (var gp = 0; gp < GROUPS.length; gp++) { %>
+          <option
+            value="<%= GROUPS[gp].value %>"
+            <%= st.group === GROUPS[gp].value ? " selected" : "" %>
+          >
+            <%= GROUPS[gp].label %>
+          </option>
+          <% } %>
+          <%
+          var knownG = false;
+          for (var gk = 0; gk < GROUPS.length; gk++) {
+            if (GROUPS[gk].value === st.group) knownG = true;
+          }
+          if (st.group && !knownG) { %>
+          <option value="<%= st.group %>" selected><%= st.group %></option>
+          <% } %>
+        </select>
+      </div>
 
-                </option>
-                <option name="group" value="OnlineStudent">OnlineStudent</option>
-                <option name="group" value="Monday">Monday</option>
-                <option name="group" value="Tuesday">Tuesday</option>
-                <option name="group" value="Wednesday">Wednesday</option>
-                <option name="group" value="Thursday">Thursday</option>
-                <option name="group" value="Friday">Friday</option>
-                <option name="group" value="Saturday">Saturday</option>
-                <option name="group" value="Sunday">Sunday</option>
-              </select>
-
-              <br />
-              <br />
-       
-              <label style="font-size: 17px;">Months</label>
-              
-              <% for(i of month){%>
-                <% if(i){%> 
-                <div style="font-size: 15px; padding-top: 5px;">
-                  <% if(student.month.includes(i.month)){ %> 
-                  <input type="checkbox" id="month" name="month" value="<%=i.month%>" checked>
-                  <label for="scales"><%=i.month%></label>
-                  <% }else { %> 
-                    <input type="checkbox" id="month" name="month" value="<%=i.month%>" >
-                      <label for="scales"><%=i.month%></label>
-                    <%}%>
-                  </div>
-                  <% } %> 
-                  <%} %> 
-                  <input type="hidden" name="month" value="" />
-                
-               <br />
-               <br />
-             isAdmin : 
-              <select name="admin" id="admin">
-                <option
-                  name="admin"
-                  value="<%=student.admin%>"
-                  class="placeholder"
-                  selected
-                  hidden
-                >
-                <%=(student.admin == undefined) ? "isAdmin":student.admin  %>
-
-                </option>
-                <option name="admin" value="true">true</option>
-                <option name="admin" value="false">false</option>
-              </select>
-
-              <br />
-              <br />
-              <button class="btn">Edit</button>
-            </form>
-          </div>
-
-          
-        </div>
+      <div class="form-field">
+        <label class="label" for="admin">الصلاحية</label>
+        <select class="select" id="admin" name="admin">
+          <% for (var ro = 0; ro < ROLES.length; ro++) { %>
+          <option
+            value="<%= ROLES[ro].value %>"
+            <%= curRole === ROLES[ro].value ? " selected" : "" %>
+          >
+            <%= ROLES[ro].label %>
+          </option>
+          <% } %>
+        </select>
+        <span class="field-hint">المشرف يرى لوحة التحكم بالكامل.</span>
       </div>
     </div>
 
-    <script src="../admin/dashboard/assets/js/main.js"></script>
-    <script
-      type="module"
-      src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"
-    ></script>
-    <script
-      nomodule
-      src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"
-    ></script>
-  </body>
-</html>
+    <fieldset class="fieldset" style="margin-block-start: var(--sp-5)">
+      <legend>الشهور المتاحة للطالب</legend>
+
+      <% if (!available.length) { %>
+      <p class="field-hint">
+        لا توجد شهور مُضافة لهذا الصف والمادة بعد، فلا شيء يمكن تحديده هنا.
+      </p>
+      <% } else { %>
+      <div class="check-grid">
+        <% for (var i = 0; i < available.length; i++) { var mo = available[i];
+           if (!mo || !mo.month) continue; %>
+        <label class="check" for="month-<%= i %>">
+          <input
+            type="checkbox"
+            id="month-<%= i %>"
+            name="month"
+            value="<%= mo.month %>"
+            <%= isChosen(mo.month) ? " checked" : "" %>
+          />
+          <span><%= mo.month %></span>
+        </label>
+        <% } %>
+      </div>
+
+      <%
+      /* No trailing hidden month input. A checkbox group with nothing ticked
+         legitimately submits no `month` key at all; the route normalises an
+         absent value to []. The old hidden input existed to force the key to
+         be present and, in doing so, wrote "" into every student's months. */
+      %>
+      <% } %>
+    </fieldset>
+
+    <div class="form-actions">
+      <button class="btn" type="submit">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="<%= ICON.save %>" />
+        </svg>
+        حفظ التعديلات
+      </button>
+      <a class="btn btn--ghost" href="/student">إلغاء</a>
+    </div>
+  </form>
+</div>
+
+<%- include("_foot") %>

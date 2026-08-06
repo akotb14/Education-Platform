@@ -1,0 +1,131 @@
+<%
+/* ======================================================================
+   ONE QUESTION BLOCK — used twice, from the same source.
+
+     · once per existing question when the form is re-rendered after a
+       validation error, and once for the initial empty question;
+     · once inside a <template>, with i = "__I__", which admin.js clones
+       and renumbers to add a question in the browser.
+
+   Rendering both from this file is the point: a repeater whose "add"
+   markup is a separate hand-written copy drifts from the server-rendered
+   one the first time a field changes, and the drift shows up as a field
+   that silently posts nothing.
+
+   FIELD NAMING. Flat and indexed — q_0_question, q_0_a0 … q_0_a3,
+   q_0_correct, q_0_image. NOT q[0][question]. app.js parses bodies with
+   express.urlencoded({ extended: false }), which is the querystring
+   module and does no bracket nesting at all, and this form is multipart
+   so multer parses it instead — multer has no nesting option either.
+   Bracket names would arrive as literal keys named "q[0][question]".
+
+   Gaps are fine. Removing a block in the browser leaves its index unused
+   and the server skips it, so nothing has to renumber the name
+   attributes as blocks come and go — only the visible label changes.
+
+   LOCALS
+     i    index for the name attributes: a number, or "__I__" in template
+     pos  the number shown to the admin (1-based), or "" in the template
+     q    { question, answers: [4], correct: 0..3 } | null
+   ====================================================================== */
+
+var qq = q && typeof q === "object" ? q : {};
+var qAnswers = Array.isArray(qq.answers) ? qq.answers : [];
+var qCorrect = qq.correct === undefined || qq.correct === null ? "" : String(qq.correct);
+
+var CHOICE_LABELS = [
+  "الاختيار الأول",
+  "الاختيار الثاني",
+  "الاختيار الثالث",
+  "الاختيار الرابع"
+];
+%>
+<fieldset class="qcard" data-qcard>
+  <legend class="qcard__legend">
+    <span class="qcard__no num" dir="ltr" data-qno><%= pos %></span>
+    <span class="qcard__legend-text">السؤال</span>
+  </legend>
+
+  <%
+  /* type="button" matters: a <button> inside a form defaults to type
+     submit, so an unadorned remove button would post the whole form. */
+  %>
+  <button class="qcard__remove" type="button" data-qremove>
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+    </svg>
+    <span class="sr-only">حذف السؤال <span data-qno><%= pos %></span></span>
+    <span aria-hidden="true">حذف</span>
+  </button>
+
+  <div class="form-field">
+    <label class="label" for="q_<%= i %>_question">
+      نص السؤال <abbr title="مطلوب">*</abbr>
+    </label>
+    <textarea
+      class="input qcard__question"
+      id="q_<%= i %>_question"
+      name="q_<%= i %>_question"
+      required
+      maxlength="500"
+      rows="2"
+      autocomplete="off"
+    ><%= qq.question || "" %></textarea>
+  </div>
+
+  <div class="qchoices" role="group" aria-label="اختيارات الإجابة">
+    <p class="qchoices__hint">
+      اكتب الاختيارات الأربعة، ثم علّم الدائرة بجوار الإجابة الصحيحة.
+    </p>
+
+    <% for (var c = 0; c < 4; c++) { %>
+    <div class="qchoice<%= qCorrect === String(c) ? " qchoice--correct" : "" %>" data-qchoice>
+      <%
+      /* The radio carries the answer key. It used to be a free-text box
+         that had to match one of these four character-for-character;
+         postQuizApp compares literally, so a stray space there scored
+         every student zero on the question with nothing on the admin
+         side to show why. correctAnswer is still STORED as the choice's
+         text, so student-side grading and every existing paper are
+         untouched — only the way it is picked has changed. */
+      %>
+      <input
+        class="qchoice__radio"
+        type="radio"
+        id="q_<%= i %>_c<%= c %>"
+        name="q_<%= i %>_correct"
+        value="<%= c %>"
+        required
+        aria-label="<%= CHOICE_LABELS[c] %> هو الإجابة الصحيحة"
+        <%= qCorrect === String(c) ? " checked" : "" %>
+      />
+      <label class="qchoice__label" for="q_<%= i %>_a<%= c %>">
+        <%= CHOICE_LABELS[c] %> <abbr title="مطلوب">*</abbr>
+      </label>
+      <input
+        class="input qchoice__text"
+        type="text"
+        id="q_<%= i %>_a<%= c %>"
+        name="q_<%= i %>_a<%= c %>"
+        required
+        maxlength="300"
+        autocomplete="off"
+        value="<%= qAnswers[c] || "" %>"
+      />
+      <span class="qchoice__flag" aria-hidden="true">صحيحة</span>
+    </div>
+    <% } %>
+  </div>
+
+  <div class="form-field qcard__image">
+    <label class="label" for="q_<%= i %>_image">صورة السؤال</label>
+    <input
+      class="input"
+      type="file"
+      id="q_<%= i %>_image"
+      name="q_<%= i %>_image"
+      accept="image/*"
+    />
+    <p class="field-hint">اختياري. PNG أو JPG أو WEBP، بحد أقصى ٥ ميجابايت.</p>
+  </div>
+</fieldset>

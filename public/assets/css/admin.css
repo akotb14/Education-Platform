@@ -1,0 +1,1521 @@
+/*
+  Admin console — shell, sidebar, stat cards and data tables.
+
+  LAYERS ON TOP OF tokens.css ONLY. Load order in every admin view is
+  tokens.css -> admin.css. It deliberately does NOT depend on home.css or
+  listing.css: the admin is a fixed-sidebar app shell, not a scrolling
+  marketing page, and pulling in home.css would drag along .site-header,
+  .page-hero, the 3D card tilt and the canvas backdrop — none of which apply.
+
+  WHAT THIS REPLACES
+  public/admin/dashboard/assets/css/style.css (8,959 B), which is left on disk
+  untouched. That file:
+    · was English-LTR only — `.navigation` is pinned with `left: 0`, the nav
+      indent notches are drawn with `border-radius` on the right corners, and
+      `.main` is offset with `margin-left`. In an RTL document all three land on
+      the wrong side. Every one of those is a physical property here instead.
+    · set `.details { width: 150% }`, so the dashboard table was one and a half
+      times the viewport at EVERY breakpoint. `body { overflow-x: hidden }` then
+      clipped it rather than letting it scroll, so the rightmost columns were
+      unreachable — not scrolled off, genuinely unreachable.
+    · used only max-width media queries (991/768/480), i.e. desktop-first, so
+      the phone layout was a stack of overrides on top of a desktop layout.
+      Mobile-first min-width here, on the canonical breakpoints.
+    · referenced `var(--black)`, which it never defines. Those rules silently
+      fell back to the inherited colour.
+
+  Breakpoints follow the canonical set documented in tokens.css:
+      sm 560px  ·  md 768px  ·  lg 992px  ·  xl 1200px
+*/
+
+/* ============================================================== reset ====== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body,
+h1,
+h2,
+h3,
+h4,
+p,
+figure,
+ul,
+ol {
+  margin: 0;
+}
+
+ul[class],
+ol[class] {
+  padding: 0;
+  list-style: none;
+}
+
+img {
+  max-inline-size: 100%;
+  block-size: auto;
+  display: block;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+body {
+  font-family: var(--font-ar);
+  font-size: var(--fs-base);
+  line-height: var(--lh-body);
+  color: var(--c-body);
+  background: var(--c-canvas);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Arabic has no letter case, and positive tracking breaks cursive joining —
+   the old theme applied `text-transform: uppercase` and letter-spacing to the
+   nav and headings, which mangles Arabic on both counts. */
+h1,
+h2,
+h3,
+h4 {
+  letter-spacing: 0;
+  line-height: var(--lh-tight);
+  color: var(--c-ink);
+  text-transform: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+:focus-visible {
+  outline: 3px solid var(--c-focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+.sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Skip link — the admin sidebar is 13 links deep, so keyboard users would
+   otherwise tab through the whole nav on every page. */
+.skip {
+  position: absolute;
+  inset-block-start: var(--sp-3);
+  inset-inline-start: var(--sp-3);
+  z-index: 200;
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--c-surface);
+  border-radius: var(--r-sm);
+  box-shadow: var(--sh-2);
+  transform: translateY(-200%);
+}
+
+.skip:focus {
+  transform: none;
+}
+
+/* A Latin digit run inside an RTL line reorders around neutrals — a count and
+   a card number both need isolating. */
+.num {
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================== shell ====== */
+/* Grid rather than the old margin-left offset: the sidebar column is a track,
+   so it needs no physical offset on .main and flips with dir automatically. */
+.admin {
+  display: grid;
+  min-block-size: 100vh;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 992px) {
+  .admin {
+    grid-template-columns: var(--side-w) 1fr;
+  }
+}
+
+:root {
+  --side-w: 264px;
+}
+
+/* ============================================================ sidebar ====== */
+/* Off-canvas below 992px, a static column above it. Slides on inset-inline-
+   start, not `left`, so it enters from the correct edge under dir="rtl". */
+.side {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: 120;
+  inline-size: min(84vw, 300px);
+  padding: var(--sp-5) var(--sp-4);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: #fff;
+  background: #14181f;
+  transform: translateX(-100%);
+  transition: transform var(--dur-2) var(--ease);
+}
+
+/* translateX does NOT mirror under dir="rtl" — the sign has to be flipped by
+   hand. This is the single most common RTL bug in a slide-in drawer. */
+[dir="rtl"] .side {
+  transform: translateX(100%);
+}
+
+.side.is-open,
+[dir="rtl"] .side.is-open {
+  transform: none;
+}
+
+@media (min-width: 992px) {
+  .side,
+  [dir="rtl"] .side {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 1;
+    inline-size: auto;
+    block-size: 100vh;
+    transform: none;
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side {
+    transition: none;
+  }
+}
+
+/* Scrim behind the open drawer. Click-to-close is wired in admin.js; this is
+   also what stops the page behind it being tapped through. */
+.side-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  background: rgb(0 0 0 / 0.45);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--dur-2) var(--ease), visibility var(--dur-2);
+}
+
+.side-scrim.is-open {
+  opacity: 1;
+  visibility: visible;
+}
+
+@media (min-width: 992px) {
+  .side-scrim {
+    display: none;
+  }
+}
+
+.side__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3) var(--sp-5);
+  margin-block-end: var(--sp-4);
+  border-block-end: 1px solid rgb(255 255 255 / 0.12);
+}
+
+.side__brand img {
+  inline-size: 40px;
+  block-size: 40px;
+  flex: none;
+  object-fit: contain;
+  border-radius: var(--r-sm);
+  background: #fff;
+}
+
+.side__brand-name {
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  color: #fff;
+  line-height: var(--lh-tight);
+}
+
+.side__brand-sub {
+  display: block;
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: rgb(255 255 255 / 0.6);
+}
+
+.side__group {
+  margin-block-start: var(--sp-5);
+  padding-inline: var(--sp-3);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: rgb(255 255 255 / 0.45);
+}
+
+.side__list {
+  display: grid;
+  gap: 2px;
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.side__link {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  /* Past the 44px minimum tap target — the old nav rows were 60px tall but
+     only the inner anchor was clickable. */
+  min-block-size: 46px;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+  color: rgb(255 255 255 / 0.78);
+  border-radius: var(--r-sm);
+  transition: background-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+
+.side__link svg {
+  inline-size: 20px;
+  block-size: 20px;
+  flex: none;
+  opacity: 0.9;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .side__link:hover {
+    color: #fff;
+    background: rgb(255 255 255 / 0.08);
+  }
+}
+
+/* Current page. The old sidebar had NO active state at all — it only had a
+   `.hovered` class that main.js attached on mouseover, so the highlight
+   followed the pointer and nothing indicated where you actually were. On a
+   touch screen it stuck to whatever was tapped last. */
+.side__link[aria-current="page"] {
+  color: #fff;
+  font-weight: 700;
+  background: var(--c-primary);
+}
+
+.side__link[aria-current="page"] svg {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side__link {
+    transition: none;
+  }
+}
+
+/* ============================================================== main ======= */
+.main {
+  min-inline-size: 0; /* lets the table scroll instead of stretching the grid */
+  padding-block-end: var(--sp-8);
+}
+
+.topbar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--gutter);
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-block-end: 1px solid var(--c-line);
+}
+
+.topbar__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 44px;
+  block-size: 44px;
+  flex: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--c-ink);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+}
+
+/* The old toggle was a bare <div> with an ion-icon in it — not focusable, not
+   announced, and unreachable by keyboard. This is a real <button>. */
+@media (min-width: 992px) {
+  .topbar__toggle {
+    display: none;
+  }
+}
+
+.topbar__toggle svg {
+  inline-size: 22px;
+  block-size: 22px;
+}
+
+.topbar__title {
+  font-size: var(--fs-h4);
+  font-weight: 800;
+  margin: 0;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.topbar__spacer {
+  margin-inline-start: auto;
+}
+
+.topbar__out {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-block-size: 44px;
+  padding: var(--sp-2) var(--sp-4);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--c-primary);
+  background: var(--c-primary-tint);
+  border: 1px solid currentColor;
+  border-radius: var(--r-pill);
+}
+
+.topbar__out svg {
+  inline-size: 18px;
+  block-size: 18px;
+}
+
+.wrap {
+  padding: var(--sp-6) var(--gutter) 0;
+}
+
+.page-title {
+  font-size: var(--fs-h3);
+  font-weight: 800;
+  margin-block-end: var(--sp-5);
+}
+
+/* ========================================================= stat cards ====== */
+.stats {
+  display: grid;
+  gap: var(--sp-4);
+  grid-template-columns: 1fr;
+  margin-block-end: var(--sp-6);
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 560px) {
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 992px) {
+  .stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1200px) {
+  .stats {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+  transition: transform var(--dur-1) var(--ease),
+    box-shadow var(--dur-1) var(--ease);
+}
+
+/* A stat that links somewhere lifts; a plain one does not pretend to. */
+@media (hover: hover) and (pointer: fine) {
+  a.stat:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--sh-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat,
+  a.stat:hover {
+    transition: none;
+    transform: none;
+  }
+}
+
+.stat__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 48px;
+  block-size: 48px;
+  border-radius: var(--r-md);
+  color: var(--c-primary);
+  background: var(--c-primary-tint);
+}
+
+.stat__icon svg {
+  inline-size: 24px;
+  block-size: 24px;
+}
+
+.stat--accent .stat__icon {
+  color: var(--c-accent);
+  background: var(--c-accent-tint);
+}
+
+.stat__value {
+  display: block;
+  font-size: var(--fs-h3);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--c-ink);
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat__label {
+  display: block;
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
+}
+
+/* ============================================================== panel ====== */
+.panel {
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+  overflow: hidden;
+}
+
+.panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-5);
+  border-block-end: 1px solid var(--c-line);
+}
+
+.panel__title {
+  font-size: var(--fs-h4);
+  font-weight: 700;
+  margin: 0;
+}
+
+.panel__link {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-block-size: 40px;
+  padding: var(--sp-2) var(--sp-4);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: #fff;
+  background: var(--c-primary);
+  border-radius: var(--r-pill);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .panel__link:hover {
+    background: var(--c-primary-dark);
+  }
+}
+
+/* ============================================================== table ====== */
+/* The scroll container, not the table. The old CSS put `width: 150%` on the
+   wrapper and `overflow-x: auto` only inside a max-width:768px query, so at
+   desktop widths the overflow was clipped by body{overflow-x:hidden} and the
+   last columns could not be reached at all. */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  /* Below this the Arabic names wrap to three lines and the row height
+     doubles; scrolling is the better trade. */
+  min-inline-size: 640px;
+}
+
+.table th,
+.table td {
+  padding: var(--sp-3) var(--sp-5);
+  text-align: start; /* logical — `left` would pin every cell in RTL */
+  vertical-align: middle;
+}
+
+.table thead th {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--c-muted);
+  white-space: nowrap;
+  background: var(--c-surface-alt);
+  border-block-end: 1px solid var(--c-line);
+}
+
+.table tbody tr + tr {
+  border-block-start: 1px solid var(--c-line);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .table tbody tr:hover {
+    background: var(--c-surface-alt);
+  }
+}
+
+.table__name {
+  font-weight: 700;
+  color: var(--c-ink);
+}
+
+/* Card numbers and phone numbers are Latin digit runs; without isolation a
+   leading zero run and a trailing one can swap around a neutral separator. */
+.table__code {
+  display: inline-block;
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--c-accent);
+  background: var(--c-accent-tint);
+  border-radius: var(--r-pill);
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.table__tel {
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.tag {
+  display: inline-block;
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--c-muted);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-pill);
+}
+
+/* ============================================================== empty ====== */
+.empty-state {
+  padding: var(--sp-8) var(--sp-5);
+  text-align: center;
+  color: var(--c-muted);
+}
+
+.empty-state svg {
+  inline-size: 44px;
+  block-size: 44px;
+  margin-inline: auto;
+  margin-block-end: var(--sp-3);
+  color: var(--c-line);
+}
+
+.empty-state__title {
+  font-size: var(--fs-h4);
+  font-weight: 700;
+  color: var(--c-ink);
+  margin-block-end: var(--sp-2);
+}
+
+/* ============================================================= reveal ====== */
+/* Inverted default, same as the student pages: content is visible in plain
+   CSS and JS opts IN to hiding it. The old theme's WOW.js set inline
+   visibility:hidden on every element and only un-hid on scroll, so a script
+   404 left a permanently blank page. */
+.js .reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity var(--dur-3) var(--ease), transform var(--dur-3) var(--ease);
+}
+
+.js .reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.js .stats .reveal:nth-child(2) {
+  transition-delay: 50ms;
+}
+.js .stats .reveal:nth-child(3) {
+  transition-delay: 100ms;
+}
+.js .stats .reveal:nth-child(4) {
+  transition-delay: 150ms;
+}
+.js .stats .reveal:nth-child(n + 5) {
+  transition-delay: 200ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js .reveal,
+  .js .reveal.is-visible {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    transition-delay: 0ms !important;
+  }
+}
+
+/* ============================================================ toolbar ====== */
+/* Filter/search bar above a table. The old roster put its <form> INSIDE
+   .topbar and styled the <select> with three inline declarations
+   (`margin: 0 5px; width: 130px; height: 25px`) — a 25px-tall control, well
+   under the 44px minimum, and unlabelled. */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-3);
+  margin-block-end: var(--sp-5);
+}
+
+.toolbar__field {
+  display: grid;
+  gap: var(--sp-1);
+  min-inline-size: 0;
+  flex: 1 1 200px;
+}
+
+.toolbar__actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+/* ============================================================== forms ====== */
+.label {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--c-muted);
+}
+
+/* One rule for both, so a text box and a dropdown line up on the same row.
+   `font: inherit` in the reset is what stops the browser default 13px
+   sans-serif from overriding Cairo inside form controls. */
+.input,
+.select {
+  inline-size: 100%;
+  min-block-size: 44px;
+  padding: var(--sp-2) var(--sp-3);
+  color: var(--c-ink);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+}
+
+.input:focus,
+.select:focus {
+  border-color: var(--c-primary);
+  box-shadow: var(--sh-focus);
+  outline: none;
+}
+
+/* A native <select> arrow sits on the physical right, which is the wrong edge
+   in RTL — but only when appearance is overridden. Left native on purpose:
+   the UA places it correctly per `dir` and it stays keyboard/AT-native. */
+.select {
+  cursor: pointer;
+}
+
+/* Latin-only values (card and phone numbers) typed into an RTL form. Without
+   dir=ltr on the element the caret jumps to the wrong end as you type. */
+.input--ltr {
+  direction: ltr;
+  text-align: start;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.field-hint {
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+}
+
+/* Invalid-field affordance. Colour alone is not sufficient (WCAG 1.4.1), so
+   the message text below the field is the primary signal and the border is
+   reinforcement. The literal matches .btn--danger rather than the brand red,
+   which is the primary-action colour on this page. */
+.form-field--error .input,
+.form-field--error .select {
+  border-color: #a3231f;
+}
+
+.field-hint--error {
+  color: #a3231f;
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------- buttons --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-block-size: 44px;
+  padding: var(--sp-2) var(--sp-5);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: #fff;
+  background: var(--c-primary);
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease);
+}
+
+.btn svg {
+  inline-size: 18px;
+  block-size: 18px;
+  flex: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover {
+    background: var(--c-primary-dark);
+  }
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn--ghost {
+  color: var(--c-ink);
+  background: var(--c-surface);
+  border-color: var(--c-line);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn--ghost:hover {
+    background: var(--c-surface-alt);
+  }
+}
+
+/* Destructive. Deliberately NOT the brand red — brand red is also the primary
+   action colour here, and a delete button must not look like a save button.
+   The old page used `background-color: brown` inline. */
+.btn--danger {
+  color: #fff;
+  background: #a3231f;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn--danger:hover {
+    background: #851c19;
+  }
+}
+
+.btn--sm {
+  min-block-size: 36px;
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .btn:active {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------ form card --- */
+.form-card {
+  max-inline-size: 720px;
+  padding: var(--sp-5);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+}
+
+.form-card__title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 800;
+  letter-spacing: 0; /* positive tracking breaks Arabic cursive joining */
+}
+
+.form-card__lede {
+  margin-block: var(--sp-2) var(--sp-5);
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
+}
+
+/* The required marker. `abbr[title]` gets a dotted underline by default in
+   several browsers, which reads as a spelling error next to a label. */
+.label abbr {
+  color: #a3231f;
+  text-decoration: none;
+  border: 0;
+  margin-inline-start: 0.25rem;
+}
+
+/* The old form was a column of bare inputs separated by literal <br /><br />
+   pairs — no labels, no grouping, and the spacing was unadjustable. */
+.form-grid {
+  display: grid;
+  gap: var(--sp-4);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .form-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .form-grid > .form-grid__full {
+    grid-column: 1 / -1;
+  }
+}
+
+.form-field {
+  display: grid;
+  gap: var(--sp-1);
+  min-inline-size: 0;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-block-start: var(--sp-5);
+  padding-block-start: var(--sp-5);
+  border-block-start: 1px solid var(--c-line);
+}
+
+.fieldset {
+  min-inline-size: 0;
+  margin: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+}
+
+.fieldset > legend {
+  padding-inline: var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--c-ink);
+}
+
+/* Month checkboxes. The old markup gave every one of them id="month" —
+   duplicate IDs — and pointed each <label for="scales"> at an element that
+   does not exist, so clicking a label toggled nothing. */
+.check-grid {
+  display: grid;
+  gap: var(--sp-2);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 560px) {
+  .check-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 992px) {
+  .check-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-block-size: 44px;
+  padding-inline: var(--sp-3);
+  font-size: var(--fs-sm);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.check input {
+  inline-size: 18px;
+  block-size: 18px;
+  flex: none;
+  accent-color: var(--c-primary);
+}
+
+.check:has(input:checked) {
+  color: var(--c-primary);
+  font-weight: 700;
+  border-color: var(--c-primary);
+  background: var(--c-primary-tint);
+}
+
+/* ============================================================== flash ====== */
+.flash {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  margin-block-end: var(--sp-5);
+  font-size: var(--fs-sm);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  background: var(--c-surface-alt);
+}
+
+.flash svg {
+  inline-size: 20px;
+  block-size: 20px;
+  flex: none;
+}
+
+.flash--ok {
+  color: #145c2e;
+  background: #e7f6ec;
+  border-color: #b6e0c4;
+}
+
+.flash--bad {
+  color: #7c1d1a;
+  background: #fdeceb;
+  border-color: #f3c4c1;
+}
+
+/* ======================================================== row actions ====== */
+/* The old table put `style="display: flex"` on a <td>. A flex <td> drops out
+   of the table layout algorithm, so that column stopped aligning with its
+   header. This wraps the buttons in a div and leaves the cell a cell. */
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+/* A delete inside a table row is a one-button <form>; it must not introduce
+   block spacing of its own. */
+.row-actions form {
+  margin: 0;
+  display: contents;
+}
+
+.badge {
+  display: inline-block;
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--c-muted);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-pill);
+}
+
+.badge--admin {
+  color: var(--c-primary);
+  background: var(--c-primary-tint);
+  border-color: currentColor;
+}
+
+/* ============================================================== pager ====== */
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border-block-start: 1px solid var(--c-line);
+}
+
+.pager__count {
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
+}
+
+.pager__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-inline-start: auto;
+}
+
+/* A disabled pager end is a <span>, not a dead <a> — nothing to focus and
+   nothing to click. */
+.pager__nav > span.btn {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ====================================================== question builder === */
+/* The repeating question editor on the add-homework / quiz / exam form.
+
+   The whole component degrades to a plain stack of fieldsets with no JS: the
+   only scripted affordances are "add another" and "remove", and .qbuilder__add
+   is hidden until the `js` class lands on <html> (set inline in _head.ejs, so
+   it is present before first paint and there is no flash of a dead button). */
+.qbuilder {
+  margin-block-start: var(--sp-5);
+}
+
+.qbuilder__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-block-end: var(--sp-3);
+}
+
+.qbuilder__title {
+  font-size: var(--fs-h4);
+  font-weight: 800;
+  color: var(--c-ink);
+}
+
+.qbuilder__count {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--c-muted);
+}
+
+.qbuilder__restored {
+  margin-block-end: var(--sp-3);
+}
+
+.qbuilder__list {
+  display: grid;
+  gap: var(--sp-4);
+}
+
+.qbuilder__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-block-start: var(--sp-4);
+}
+
+.qbuilder__add {
+  display: none;
+}
+
+.js .qbuilder__add {
+  display: inline-flex;
+}
+
+/* ---------------------------------------------------------- one question -- */
+.qcard {
+  position: relative;
+  min-inline-size: 0;
+  margin: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+}
+
+.qcard__legend {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-inline: var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--c-ink);
+}
+
+/* The position number. Counts up from 1 and is rewritten by admin.js whenever
+   a block is added or removed, so what the admin reads always matches the
+   order the questions are stored in. */
+.qcard__no {
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: 26px;
+  min-block-size: 26px;
+  padding-inline: 6px;
+  border-radius: 999px;
+  background: var(--c-primary);
+  color: #fff;
+  font-size: var(--fs-xs);
+  font-weight: 800;
+}
+
+/* inset-inline-end, not `right`: in RTL this is the top-left corner.
+   Hidden without JS for the same reason as the add button — removing a block
+   is a scripted affordance, and a dead control is worse than no control. */
+.qcard__remove {
+  position: absolute;
+  inset-block-start: var(--sp-3);
+  inset-inline-end: var(--sp-3);
+  display: none;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 32px;
+  padding-inline: var(--sp-2);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-muted);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.js .qcard__remove {
+  display: inline-flex;
+}
+
+.qcard__remove svg {
+  inline-size: 15px;
+  block-size: 15px;
+}
+
+.qcard__remove:hover,
+.qcard__remove:focus-visible {
+  border-color: #a3231f;
+  color: #a3231f;
+}
+
+/* One question left: removing it would leave a form that cannot be submitted,
+   so the button is disabled rather than absent — a control that vanishes and
+   reappears as you add blocks is harder to follow than one that greys out. */
+.qcard__remove[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.qcard__question {
+  resize: vertical;
+}
+
+.qcard__image {
+  margin-block-start: var(--sp-4);
+}
+
+/* --------------------------------------------------------------- choices -- */
+.qchoices {
+  margin-block-start: var(--sp-4);
+}
+
+.qchoices__hint {
+  margin-block-end: var(--sp-3);
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+}
+
+/* Radio in column 1 spanning both rows; label above its own text box in
+   column 2. Grid rather than flex so the four rows align on the radio
+   regardless of how long a choice label wraps. */
+.qchoice {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  column-gap: var(--sp-3);
+  row-gap: 4px;
+  align-items: center;
+  padding: var(--sp-2);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+}
+
+.qchoice + .qchoice {
+  margin-block-start: var(--sp-2);
+}
+
+.qchoice__radio {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  inline-size: 20px;
+  block-size: 20px;
+  accent-color: var(--c-primary);
+  cursor: pointer;
+}
+
+.qchoice__label {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--c-muted);
+}
+
+.qchoice__text {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+/* The "correct" flag occupies its cell whether or not it is shown, so ticking
+   a different choice does not reflow the four rows. */
+.qchoice__flag {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  visibility: hidden;
+  padding-inline: var(--sp-2);
+  border-radius: 999px;
+  background: #e8f5ec;
+  color: #1c6b3a;
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* Class is toggled by admin.js; :has() covers the no-JS case in browsers that
+   support it. Both are decoration — the radio itself is the state. */
+.qchoice--correct,
+.qchoice:has(.qchoice__radio:checked) {
+  border-color: #1c6b3a;
+  background: #f4fbf6;
+}
+
+.qchoice--correct .qchoice__flag,
+.qchoice:has(.qchoice__radio:checked) .qchoice__flag {
+  visibility: visible;
+}
+
+/* A count on the submit button, so the admin can confirm how many questions
+   are about to be saved without scrolling back up. */
+.btn__badge {
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: 22px;
+  min-block-size: 22px;
+  padding-inline: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+}
+
+@media (max-width: 560px) {
+  /* The remove button and the legend collide on a narrow card. */
+  .qcard {
+    padding-block-start: var(--sp-6);
+  }
+
+  .qcard__remove {
+    inset-block-start: var(--sp-2);
+  }
+
+  .qchoice__flag {
+    display: none;
+  }
+}
+
+/* ============================================================= crumbs ====== */
+/* One link back to the list, above the edit card. Not a full breadcrumb trail:
+   the admin shell already shows where you are in the sidebar, and the only
+   thing missing from an edit page is the way out. */
+.crumbs {
+  margin-block-end: var(--sp-4);
+  font-size: var(--fs-sm);
+}
+
+.crumbs a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-block-size: 44px;
+  color: var(--c-muted);
+  font-weight: 700;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .crumbs a:hover {
+    color: var(--c-primary);
+  }
+}
+
+/* ============================================== existing questions list ==== */
+/* The read-only list of questions already saved on the paper, below the edit
+   form. It is NOT the builder: nothing here is an input, every row carries its
+   own delete form, and the whole section sits outside the edit <form> because a
+   nested form would be dropped by the parser and its delete button would submit
+   the edit instead.
+
+   The old markup was a table. A table of question + four choices + a delete
+   button has no usable phone layout — five columns of Arabic prose inside a
+   150%-wide table, which is how the previous stylesheet made the rightmost
+   column unreachable. Cards stack instead. */
+
+/* .form-card is capped at 720px and the panel is not, so without this the list
+   would run full-bleed under a narrow card and read as a different page. */
+.qlist-panel {
+  max-inline-size: 720px;
+  margin-block-start: var(--sp-6);
+}
+
+.qlist {
+  display: grid;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+}
+
+.qlist__item {
+  padding: var(--sp-4);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+}
+
+.qlist__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+
+/* Fixed size and no shrink: the number is the anchor the eye scans down, and
+   a flex item with Arabic prose beside it collapses to nothing otherwise. */
+.qlist__no {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 28px;
+  block-size: 28px;
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  color: #fff;
+  background: var(--c-primary);
+  border-radius: var(--r-pill);
+}
+
+.qlist__q {
+  flex: 1 1 12rem;
+  font-weight: 700;
+  line-height: var(--lh-body);
+  /* Long unbroken strings — a pasted URL, a formula — otherwise widen the
+     card past the grid column and reintroduce the horizontal scroll. */
+  overflow-wrap: anywhere;
+}
+
+/* margin-inline-start, not margin-left: this pushes the delete button to the
+   far edge of the row, which is the LEFT edge in RTL. */
+.qlist__del {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
+.qlist__has-image {
+  margin-block-start: var(--sp-3);
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+}
+
+.qlist__choices {
+  display: grid;
+  gap: var(--sp-2);
+  margin-block-start: var(--sp-3);
+}
+
+.qlist__choices li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+  overflow-wrap: anywhere;
+}
+
+/* border-inline-start, so the accent bar sits on the reading edge — the right
+   in RTL. border-left would put it on the wrong side of every choice. */
+.qlist__choices .is-correct {
+  border-color: var(--c-accent);
+  border-inline-start-width: 3px;
+  background: var(--c-accent-tint);
+}
+
+.qlist__choice {
+  flex: 1 1 auto;
+}
+
+/* Not colour alone: the correct answer is also named in text, so it survives
+   a colour-blind reader, a greyscale print and a low-contrast screen. */
+.qlist__flag {
+  flex: 0 0 auto;
+  padding: 2px var(--sp-2);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--c-accent);
+  background: var(--c-surface);
+  border: 1px solid var(--c-accent);
+  border-radius: var(--r-pill);
+}
+
+@media (min-width: 768px) {
+  .qlist {
+    gap: var(--sp-5);
+  }
+
+  /* Two columns of choices once there is room. Below this they stack, because
+     four Arabic answers side by side at 360px wrap to unreadable slivers. */
+  .qlist__choices {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+
+/* Admins print these tables. Without this the fixed sidebar prints on page 1
+   and the table is clipped to the grid column. */
+@media print {
+  .side,
+  .side-scrim,
+  .topbar,
+  .panel__link,
+  .toolbar,
+  .row-actions,
+  .pager__nav,
+  .form-actions,
+  .crumbs,
+  .qlist__del {
+    display: none !important;
+  }
+
+  .admin {
+    display: block;
+  }
+
+  .panel {
+    border: 0;
+    box-shadow: none;
+  }
+
+  .table {
+    min-inline-size: 0;
+  }
+}

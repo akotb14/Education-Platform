@@ -1,169 +1,378 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
   <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#fe3f40" />
+
+    <%
+      /* Rendered only by routes/units.router.js
+             /content/:educetionlevel/:grade/:month/:id   (isMonth-guarded)
+         with { data, edu, grade, month }.
+
+         `data` is the matching row out of the unit document's `units` array,
+         and is undefined when the document is missing or when no row carries
+         that :id — a hand-typed or stale URL. Everything below is written for
+         that being undefined; the page renders a not-found state rather than
+         the header-and-footer-with-nothing-between it produced before.
+
+         Locals are still read behind typeof guards so the view stays safe if
+         another route ever renders it with a different shape, as units.ejs is
+         rendered by two callers today. */
+      var SUBJECTS = { biology: "الأحياء", geology: "الجيولوجيا" };
+      var GRADES = {
+        "1st": "الصف الأول الثانوي",
+        "2nd": "الصف الثاني الثانوي",
+        "3rd": "الصف الثالث الثانوي"
+      };
+
+      var eduRaw    = typeof edu   !== "undefined" && edu   ? String(edu)   : "";
+      var gradeRaw  = typeof grade !== "undefined" && grade ? String(grade) : "";
+      var monthName = typeof month !== "undefined" && month ? String(month) : "";
+
+      var subjectName = SUBJECTS[eduRaw] || "";
+      var gradeName   = GRADES[gradeRaw] || "";
+
+      var row = (typeof data !== "undefined" && data && typeof data === "object") ? data : null;
+      var title = row && row.unit ? String(row.unit) : "";
+
+      /* Built only from whitelisted values, so a crafted :edu / :grade cannot
+         steer where these point. Both fall back to the homepage. */
+      var monthsHref = SUBJECTS[eduRaw] && GRADES[gradeRaw] ? "/" + eduRaw + "/" + gradeRaw : "/";
+      var unitsHref =
+        SUBJECTS[eduRaw] && GRADES[gradeRaw] && monthName
+          ? "/lessons/" + encodeURIComponent(eduRaw) + "/" +
+            encodeURIComponent(gradeRaw) + "/" + encodeURIComponent(monthName)
+          : monthsHref;
+
+      /* A Google Drive FILE ID, embedded as /file/d/<id>/preview. Empty on a
+         unit that has a PDF or a quiz but no video. */
+      var driveId = row && row.lesson ? String(row.lesson).trim() : "";
+
+      /* Uploaded PDFs land in ./documantion/ (middlewares/upload.js) and that
+         directory is mounted at the root by app.js:72, so the file is served
+         at /<filename>.
+
+         The old code did pdf.split('\\')[1] || pdf.split('/')[1], which takes
+         the SECOND segment rather than the last and so returned undefined for
+         any path deeper than one level. Splitting on both separators and
+         taking the last segment is correct on Windows and POSIX alike.
+
+         It also tested `data['pdf'] != ""` before calling .split on it — and
+         undefined != "" is true, so a row whose pdf field was never set threw
+         a TypeError inside render. Express sends render errors to its error
+         handler rather than the route's catch, so that surfaced as a 500. */
+      var pdfRaw = row && row.pdf ? String(row.pdf).trim() : "";
+      var pdfName = pdfRaw ? pdfRaw.split(/[\\/]/).pop() : "";
+      var pdfHref = pdfName ? "/" + encodeURIComponent(pdfName) : "";
+
+      /* quizId and homeId are both set by controllers/quiz.contro.js onto
+         units.$.quizId / units.$.homeId, so they are symmetric.
+
+         The homework link used to be a hard-coded /openHomework, which lists
+         every homework on the platform for every grade — the student had to
+         find their own. When this row has a homeId it now links straight to
+         it, exactly as the quiz link already did, and only falls back to the
+         full list when the row has none. */
+      var quizId = row && row.quizId ? String(row.quizId) : "";
+      var homeId = row && row.homeId ? String(row.homeId) : "";
+      var homeHref = homeId ? "/homework/" + encodeURIComponent(homeId) : "/openHomeWork";
+    %>
+
+    <meta name="robots" content="noindex, nofollow" />
+    <meta
+      name="description"
+      content="<%= title || 'درس' %> — منصة أ/ مرڤت عبدالرحمن."
+    />
+
+    <title>
+      <%= title ? title + " — " : "" %>الدرس | منصة أ/ مرڤت عبدالرحمن
+    </title>
+
     <link rel="icon" type="image/png" href="/assets/images/logo.png" />
 
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>كوين الاحياء والچيولوچيا</title>
+    <!-- Set before the stylesheets so .reveal elements never flash visible.
+         CSS keeps content visible unless this class is present, so a JS
+         failure leaves a readable page rather than a blank one. -->
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap"
       rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css"
     />
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/swiper/swiper-bundle.min.css"
-    />
-    <link rel="stylesheet" href="../../../../lessons/style.css" />
+
+    <link rel="stylesheet" href="/assets/css/tokens.css" />
+    <link rel="stylesheet" href="/assets/css/home.css" />
+    <link rel="stylesheet" href="/assets/css/listing.css" />
+    <link rel="stylesheet" href="/assets/css/lesson.css" />
+
+    <script src="/assets/js/home.js" defer></script>
   </head>
+
   <body oncontextmenu="return false;">
-    <main>
-      <header id="header">
-        <div class="overlay overlay-lg">
+    <a class="sr-only" href="#main">تخطي إلى المحتوى</a>
+
+    <div class="scroll-progress" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="container site-header__inner">
+        <a class="site-logo" href="/">
           <img
-            src="../../../../lessons/img/points1.png"
-            class="points points1"
-            alt=""
+            src="/assets/images/logo.png"
+            alt="منصة أ/ مرڤت عبدالرحمن"
+            width="960"
+            height="960"
           />
-        </div>
+        </a>
 
-        <nav>
-          <div class="container">
-            <div class="logo">
-              <a href="/">
-                <img src="/assets/images/logo.png" alt="" />
-              </a>
-            </div>
-          </div>
-        </nav>
-      </header>
-      <% if(data){ %>
-      <section class="home" id="home">
-        <h1>education from home</h1>
-        <p>...غير حياتك من خلال التعليم الاونلاين</p>
+        <button
+          class="nav-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="site-nav"
+        >
+          <span class="sr-only">القائمة</span>
+          <span class="nav-toggle__bars" aria-hidden="true"></span>
+        </button>
 
-        <div class="shape"></div>
-        <!-- about section starts  -->
-
-        <section class="about" id="about">
-          <div class="image">
-            <div class="column-2 image">
-              <div style="width: 640px; height: 480px; position: relative">
-                <iframe
-                  src="https://drive.google.com/file/d/<%=data.lesson%>/preview"
-                  allowfullscreen="true"
-                  width="640"
-                  height="480"
-                  frameborder="0"
-                  scrolling="no"
-                  seamless=""
-                ></iframe>
-
-                <div
-                  style="
-                    width: 80px;
-                    height: 80px;
-                    position: absolute;
-                    opacity: 0;
-                    right: 0px;
-                    top: 0px;
-                  "
-                >
-                  &nbsp;
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </section>
-      <br />
-      <br />
-
-      <h1>
-        <p class="exercise">
-          حل التدريبات
-          <a rel="nofollow" href="/openHomework">الواجب</a>
-          &
-          <a rel="nofollow" href="/quiz/<%=data.quizId%>"> الكويز</a>
-        </p>
-      </h1>
-      <% if (data['pdf'] != ""){ %>
-      <h1>
-        <p class="exercise">
-          <a rel="nofollow" <% let pdf="" %>
-            <%pdf = data['pdf'].split('\\')[1] || data['pdf'].split('/')[1] %>
-            href="/<%=pdf%>" >Pdf</a
-          >
-          تحميل
-        </p>
-      </h1>
-      <% } %>
-
-      <br />
-      <br />
-      <% } %>
-      <!-- about section ends -->
-    </main>
-    <footer class="footer">
-      <div class="container">
-        <div class="grid-4"></div>
-
-        <div class="bottom-footer">
-          <div class="copyright">
-            <p class="text">
-              © Copyright 2022. All Rights Reserved.
-
-              <br />Developed By:
+        <nav class="site-nav" id="site-nav" aria-label="التنقل الرئيسي">
+          <ul class="site-nav__list">
+            <li><a class="site-nav__link" href="/#courses">الصفوف</a></li>
+            <li><a class="site-nav__link" href="/#activities">الاختبارات</a></li>
+            <li><a class="site-nav__link" href="/#contact">تواصل</a></li>
+            <li>
               <a
-                rel="nofollow"
-                href="https://www.facebook.com/profile.php?id=100011225383830"
-                >Abdelrahman</a
+                class="site-nav__link site-nav__link--cta"
+                href="/logout"
+                data-magnetic
               >
-              &
-              <a rel="nofollow" href="https://www.facebook.com/ahmed11mahomed">
-                Kotp</a
-              >
-            </p>
+                تسجيل الخروج
+              </a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="page-hero">
+        <div class="container page-hero__inner">
+          <nav class="crumbs" aria-label="مسار التصفح">
+            <ol class="crumbs__list">
+              <li><a href="/">الرئيسية</a></li>
+              <% if (subjectName) { %>
+              <li class="crumbs__sep" aria-hidden="true">/</li>
+              <li>
+                <a href="<%= monthsHref %>">
+                  <%= subjectName %><%= gradeName ? " — " + gradeName : "" %>
+                </a>
+              </li>
+              <% } %> <% if (monthName) { %>
+              <li class="crumbs__sep" aria-hidden="true">/</li>
+              <li><a href="<%= unitsHref %>"><%= monthName %></a></li>
+              <% } %> <% if (title) { %>
+              <li class="crumbs__sep" aria-hidden="true">/</li>
+              <li><span aria-current="page"><%= title %></span></li>
+              <% } %>
+            </ol>
+          </nav>
+
+          <!-- The old page's only <h1> read "education from home" — English
+               boilerplate from the theme, on an Arabic page, repeated on every
+               lesson. The unit's own name was never shown at all, so a student
+               could not tell which lesson they had opened. -->
+          <h1 class="page-hero__title">
+            <% if (title) { %><em><%= title %></em><% } else { %>
+            <em>الدرس</em><% } %>
+          </h1>
+
+          <div class="meta-row">
+            <% if (gradeName) { %>
+            <span class="chip">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 3 1 9l11 6 9-4.91V17h2V9L12 3ZM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82Z" />
+              </svg>
+              <%= gradeName %>
+            </span>
+            <% } %> <% if (monthName) { %>
+            <span class="chip chip--primary">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M7 2v2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2H7ZM5 9h14v10H5V9Z" />
+              </svg>
+              <%= monthName %>
+            </span>
+            <% } %>
           </div>
+        </div>
+      </section>
 
-          <div class="followme-wrap">
-            <div class="followme">
-              <h3>Follow us</h3>
-              <span class="footer-line"></span>
-              <div class="social-media">
-                <a
-                  href="https://www.facebook.com/110791531658361/posts/pfbid0c69AZYrLKtQCiFQXe7t7vpaw4bi9WRtpT1SavhTNHJ1kXWonQ7bVSdpRhuVthVyTl/"
-                >
-                  <i class="fab fa-facebook-f"></i>
-                </a>
-
-                <a href="#">
-                  <i class="fa fa-youtube"></i>
-                </a>
-                <a href="whatsapp://send?text=Hello!&phone=01122839310">
-                  <i class="fa fa-whatsapp"></i>
-                </a>
-              </div>
-            </div>
-
-            <div class="back-btn-wrap">
-              <a href="#" class="back-btn">
-                <i class="fas fa-chevron-up"></i>
+      <section class="section">
+        <div class="container">
+          <% if (!row) { %>
+          <!-- Reached by a stale or hand-typed :id. The route used to answer
+               the bare string "lesson is not added" for a missing unit doc,
+               and this template used to render its header and footer with an
+               empty gap between them for a missing row. -->
+          <div class="empty">
+            <span class="empty__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z" />
+              </svg>
+            </span>
+            <h2 class="empty__title">هذا الدرس غير موجود</h2>
+            <p class="empty__text">
+              ربما تم حذف الدرس أو تغيير الرابط. ارجع لقائمة الدروس واختر من
+              جديد.
+            </p>
+            <div class="empty__actions">
+              <a class="btn btn--primary" href="<%= unitsHref %>" data-magnetic>
+                العودة لقائمة الدروس
               </a>
             </div>
           </div>
+
+          <% } else { %>
+          <div class="card-stage reveal">
+            <% if (driveId) { %>
+            <div class="player">
+              <iframe
+                src="https://drive.google.com/file/d/<%= encodeURIComponent(driveId) %>/preview"
+                title="فيديو الدرس: <%= title %>"
+                allow="autoplay; fullscreen"
+                allowfullscreen
+                loading="lazy"
+              ></iframe>
+              <!-- Carried over from the original page verbatim; see the note
+                   on .player__guard in lesson.css for why this one uses
+                   physical top/right rather than logical insets. -->
+              <div class="player__guard" aria-hidden="true"></div>
+            </div>
+
+            <% } else { %>
+            <div class="player player--empty">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v12h16V6H4Zm6 2.5 5 3.5-5 3.5v-7Z" />
+              </svg>
+              <p>لم يتم رفع فيديو هذا الدرس بعد.</p>
+            </div>
+            <% } %>
+          </div>
+
+          <!-- Homework, quiz and PDF. Each was previously a bare link inside
+               an <h1><p> pair — invalid nesting that makes the parser close
+               the h1 before the p even opens. -->
+          <div class="res-grid">
+            <div class="card-stage reveal">
+              <a class="card res-card" href="<%= homeHref %>" data-tilt>
+                <span class="res-card__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M5 3h11l4 4v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm2 6v2h10V9H7Zm0 4v2h10v-2H7Zm0 4v2h6v-2H7Z" />
+                  </svg>
+                </span>
+                <span class="res-card__body">
+                  <span class="res-card__title">الواجب</span>
+                  <span class="res-card__hint">
+                    <% if (homeId) { %>حل واجب هذا الدرس<% } else { %>
+                    كل الواجبات المتاحة<% } %>
+                  </span>
+                </span>
+                <span class="res-card__go" aria-hidden="true">←</span>
+              </a>
+            </div>
+
+            <% if (quizId) { %>
+            <div class="card-stage reveal">
+              <a
+                class="card res-card res-card--quiz"
+                href="/quiz/<%= encodeURIComponent(quizId) %>"
+                data-tilt
+              >
+                <span class="res-card__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm1.6-6.7-.9.9c-.5.5-.7 1-.7 1.8h-2v-.5c0-.8.3-1.5.9-2.1l1.2-1.2c.3-.4.4-.9.3-1.3a1.8 1.8 0 0 0-3.5.5h-2A3.8 3.8 0 0 1 12 4.5a3.8 3.8 0 0 1 3.8 3.8c0 .8-.3 1.5-.9 2Z" />
+                  </svg>
+                </span>
+                <span class="res-card__body">
+                  <span class="res-card__title">الكويز</span>
+                  <span class="res-card__hint">اختبر نفسك في الدرس</span>
+                </span>
+                <span class="res-card__go" aria-hidden="true">←</span>
+              </a>
+            </div>
+            <% } %> <% if (pdfHref) { %>
+            <div class="card-stage reveal">
+              <!-- Opens in a new tab: navigating away from the lesson to read
+                   a PDF loses the video's playback position. -->
+              <a
+                class="card res-card res-card--pdf"
+                href="<%= pdfHref %>"
+                target="_blank"
+                rel="noopener"
+                data-tilt
+              >
+                <span class="res-card__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 2h8l6 6v14H6V2Zm7 1.5V9h5.5L13 3.5ZM8 13h8v2H8v-2Zm0 4h8v2H8v-2Z" />
+                  </svg>
+                </span>
+                <span class="res-card__body">
+                  <span class="res-card__title">ملف الدرس</span>
+                  <span class="res-card__hint" dir="ltr"><%= pdfName %></span>
+                </span>
+                <span class="res-card__go" aria-hidden="true">←</span>
+              </a>
+            </div>
+            <% } %>
+          </div>
+
+          <div class="lesson-back">
+            <a class="btn" href="<%= unitsHref %>" data-magnetic>
+              <span aria-hidden="true">←</span> كل دروس <%= monthName || "الشهر" %>
+            </a>
+          </div>
+          <% } %>
         </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>
+          © <span class="num">2026</span> جميع الحقوق محفوظة — منصة أ/ مرڤت
+          عبدالرحمن.
+          <br />Developed By:
+          <a
+            rel="nofollow noopener"
+            href="https://www.facebook.com/profile.php?id=100011225383830"
+            >Abdelrahman</a
+          >
+          &amp;
+          <a rel="nofollow noopener" href="https://www.facebook.com/ahmed11mahomed"
+            >Kotb</a
+          >
+        </p>
       </div>
     </footer>
 
-    <script
-      src="https://kit.fontawesome.com/f05b3a1e7e.js"
-      crossorigin="anonymous"
-    ></script>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <button class="to-top" type="button" data-to-top>
+      <span class="sr-only">العودة إلى أعلى الصفحة</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+        <path
+          d="M12 19V5m0 0-6 6m6-6 6 6"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </button>
+
     <script>
       document.onkeydown = function (e) {
-        if (event.keyCode == 123) {
+        if (e.keyCode == 123) {
           return false;
         }
         if (e.ctrlKey && e.shiftKey && e.keyCode == "I".charCodeAt(0)) {
@@ -177,6 +386,5 @@
         }
       };
     </script>
-    <script src="app.js"></script>
   </body>
 </html>

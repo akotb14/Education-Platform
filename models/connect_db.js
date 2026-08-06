@@ -1,26 +1,17 @@
 const mongoose = require("mongoose");
+const config = require("../config");
 
 module.exports = class ConnectDB {
   static db() {
-    mongoose.set('strictQuery', true);
-    mongoose
-      .connect("mongodb+srv://ahmed17:medocool14@education.w86z5.mongodb.net/DE",
-        {
-          useNewUrlParser: true,
-          useUnifiedTopology: true,
-        }
-      )
+    mongoose.set("strictQuery", true);
+    return mongoose
+      .connect(config.databaseUrl)
       .then(() => {
         console.log("db is connected");
       })
       .catch((e) => {
-        console.log(e);
-
+        console.error("db connection failed:", e.message);
+        process.exit(1);
       });
-           
-
   }
-
-}; 
-  
- 
+};

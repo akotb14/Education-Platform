@@ -1,0 +1,195 @@
+<%
+/* =========================================================================
+   ADMIN SHELL — TOP HALF.  Pairs with _foot.ejs, which closes what this
+   opens. Every view in views/admin/ is an include of _head, then the page
+   content, then an include of _foot.
+
+   NOTE for whoever edits this header: do NOT write a literal example of an
+   include tag in here. EJS scans for the closing delimiter lexically, with no
+   notion of JavaScript comments, so a "percent greater-than" sequence inside
+   this block ends the scriptlet on that line and everything below it is
+   emitted as raw text. That is exactly what happened the first time.
+
+   WHAT THIS REPLACES
+   The 13-item sidebar was copy-pasted into all 14 admin views — roughly 110
+   identical lines each, ~1,500 lines of duplication. It had already drifted:
+   addbank.ejs carried a 14th item ("Add Banks" -> /addBank) present in no
+   other view and pointing at a route that does not exist, and quiz.ejs's
+   script tag was missing the `admin/` path segment, so its menu toggle was
+   dead. One file now, so the next drift is impossible.
+
+   LOCALS
+     active  String  key of the current nav item, drives aria-current.
+                     Optional; an unknown or missing value highlights nothing.
+     title   String  topbar heading and <title>. Optional.
+
+   Both are read behind typeof guards. EJS compiles with `with(locals)`, so an
+   unguarded reference to a key the caller did not pass throws a
+   ReferenceError rather than yielding undefined — the guards are what let 14
+   callers pass different things to one partial.
+
+   PATHS are root-relative. The old views used "../admin/dashboard/assets/..."
+   which only resolved from a one-segment URL; at a two-segment URL such as
+   /showStudentsDegree/quiz the same string resolved to
+   /showStudentsDegree/admin/... and 404'd, silently unstyling the page.
+   ====================================================================== */
+
+var activeKey = typeof active !== "undefined" && active ? String(active) : "";
+var pageTitle =
+  typeof title !== "undefined" && title ? String(title) : "لوحة التحكم";
+
+/* Icons inline as currentColor SVG. The old shell pulled ionicons 5.5.2 from
+   unpkg via two <script> tags on every admin page: a third-party
+   render-blocking request for a dozen glyphs, which also meant the whole
+   navigation was iconless whenever unpkg was slow, blocked or offline. */
+var ICONS = {
+  home: "M12 3 2 12h3v9h6v-6h2v6h6v-9h3L12 3Z",
+  grid: "M3 3h8v8H3V3Zm10 0h8v8h-8V3ZM3 13h8v8H3v-8Zm10 0h8v8h-8v-8Z",
+  users:
+    "M16 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 1a3 3 0 1 0-3-3 3 3 0 0 0 3 3Zm0 2c-2.7 0-6 1.3-6 4v3h8v-3a5 5 0 0 1 1.5-3.4A10 10 0 0 0 8 14Zm8 0c-3 0-8 1.5-8 4.5V21h16v-2.5c0-3-5-4.5-8-4.5Z",
+  online:
+    "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 4a3 3 0 1 1-3 3 3 3 0 0 1 3-3Zm0 13a7 7 0 0 1-5.3-2.4C7.5 15 9.7 14 12 14s4.5 1 5.3 2.6A7 7 0 0 1 12 19Z",
+  video:
+    "M4 5h11a2 2 0 0 1 2 2v2.5l5-3v11l-5-3V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z",
+  paper:
+    "M5 3h11l4 4v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm2 6v2h10V9H7Zm0 4v2h10v-2H7Zm0 4v2h6v-2H7Z",
+  clipboard:
+    "M9 2h6a1 1 0 0 1 1 1v1h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V3a1 1 0 0 1 1-1Zm0 3v1h6V5H9Zm-2 6v2h10v-2H7Zm0 4v2h7v-2H7Z",
+  book: "M4 3h11a3 3 0 0 1 3 3v15H7a3 3 0 0 1-3-3V3Zm2 2v13a1 1 0 0 0 1 1h9V6a1 1 0 0 0-1-1H6Z",
+  chart: "M3 21V3h2v16h16v2H3Zm4-4V10h3v7H7Zm5 0V6h3v11h-3Zm5 0v-5h3v5h-3Z",
+  plus: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z",
+  menu: "M3 6h18v2H3V6Zm0 5h18v2H3v-2Zm0 5h18v2H3v-2Z",
+  out: "M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5v-2H5V5h5V3Zm4.5 3.5L13 8l3 3H8v2h8l-3 3 1.5 1.5L20 12l-5.5-5.5Z"
+};
+
+/* Rendered from data, and grouped: 13 flat links read as one undifferentiated
+   column, which is how the old sidebar interleaved "Quiz" with "show Quiz
+   Degree" and made both harder to find. */
+var NAV = [
+  {
+    group: "عام",
+    items: [
+      { key: "dashboard", href: "/dashboard", label: "لوحة التحكم", icon: "grid" },
+      { key: "site", href: "/", label: "عرض الموقع", icon: "home" }
+    ]
+  },
+  {
+    group: "الطلاب",
+    items: [
+      { key: "students", href: "/student", label: "الطلاب", icon: "users" },
+      { key: "online", href: "/admin/studentOnline", label: "طلاب أونلاين", icon: "online" },
+      { key: "addstudent", href: "/addStudent", label: "إضافة طالب", icon: "plus" }
+    ]
+  },
+  {
+    group: "المحتوى",
+    items: [
+      { key: "lessons", href: "/lesson", label: "الدروس", icon: "video" },
+      { key: "homework", href: "/admin/homework", label: "الواجبات", icon: "paper" },
+      { key: "quiz", href: "/admin/quiz", label: "الكويزات", icon: "clipboard" },
+      { key: "exam", href: "/admin/exam", label: "الامتحانات", icon: "book" }
+    ]
+  },
+  {
+    group: "الدرجات",
+    items: [
+      { key: "deg-homework", href: "/showStudentsDegree/homework", label: "درجات الواجبات", icon: "chart" },
+      { key: "deg-quiz", href: "/showStudentsDegree/quiz", label: "درجات الكويزات", icon: "chart" },
+      { key: "deg-exam", href: "/showStudentsDegree/exam", label: "درجات الامتحانات", icon: "chart" }
+    ]
+  }
+];
+%><!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#14181f" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title><%= pageTitle %> | لوحة التحكم</title>
+
+    <link rel="icon" type="image/png" href="/admin/logo2.png" />
+
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="/assets/css/tokens.css" />
+    <link rel="stylesheet" href="/assets/css/admin.css" />
+
+    <script src="/assets/js/admin.js" defer></script>
+  </head>
+
+  <body>
+    <a class="skip" href="#main">تخطي إلى المحتوى</a>
+
+    <div class="admin">
+      <div class="side-scrim" data-side-scrim></div>
+
+      <aside class="side" id="admin-side" data-side>
+        <a class="side__brand" href="/dashboard">
+          <img src="/admin/logo2.png" alt="" width="40" height="40" />
+          <span class="side__brand-name">
+            لوحة التحكم
+            <span class="side__brand-sub">منصة أ/ مرڤت عبدالرحمن</span>
+          </span>
+        </a>
+
+        <nav aria-label="تنقل لوحة التحكم">
+          <% for (var g = 0; g < NAV.length; g++) { var grp = NAV[g]; %>
+          <p class="side__group"><%= grp.group %></p>
+          <ul class="side__list">
+            <% for (var n = 0; n < grp.items.length; n++) { var it = grp.items[n]; %>
+            <li>
+              <a
+                class="side__link"
+                href="<%= it.href %>"
+                <%- it.key === activeKey ? 'aria-current="page"' : "" %>
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="<%= ICONS[it.icon] %>" />
+                </svg>
+                <%= it.label %>
+              </a>
+            </li>
+            <% } %>
+          </ul>
+          <% } %>
+        </nav>
+      </aside>
+
+      <div class="main">
+        <div class="topbar">
+          <button
+            class="topbar__toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="admin-side"
+            data-side-toggle
+          >
+            <span class="sr-only">فتح القائمة</span>
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="<%= ICONS.menu %>" />
+            </svg>
+          </button>
+
+          <h1 class="topbar__title"><%= pageTitle %></h1>
+
+          <span class="topbar__spacer"></span>
+
+          <a class="topbar__out" href="/logout">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="<%= ICONS.out %>" />
+            </svg>
+            تسجيل الخروج
+          </a>
+        </div>
+
+        <main id="main" class="wrap">

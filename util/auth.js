@@ -1,16 +1,17 @@
 const jwt = require("jsonwebtoken");
+const config = require("../config");
+
 const isLogin = (req, res, nxt) => {
-try{
-    let student = jwt.verify(req.cookies.student, process.env.SecretPassword);
+  try {
+    let student = jwt.verify(req.cookies.student, config.jwtSecret);
     if (student) {
-        nxt();
-      
+      nxt();
     } else {
       return res.redirect("/");
     }
-}catch(err){
+  } catch (err) {
     res.redirect("/");
-}
+  }
 };
 
 module.exports = isLogin;

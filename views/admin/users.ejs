@@ -1,242 +1,318 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="../admin/dashboard/assets/css/style.css" />
-    <link rel="stylesheet" href="../admin/dashboard/assets/css/users.css" />
-    <title>Uesrs</title>
-  </head>
-  <body>
-    <!-- =============== Navigation ================ -->
-    <div class="container">
-      <div class="navigation">
-        <ul>
-          <li>
-            <a href="#" class="nav">
-              <span class="icon">
-                <img src="/logo2.png" alt="" />
-              </span>
-              <span class="title">The Quen Platform</span>
-            </a>
-          </li>
+<%- include("_head", { active: "students", title: "الطلاب" }) %>
+<%
+/* =========================================================================
+   STUDENT ROSTER
 
-          <li>
-            <a href="/" class="nav">
-              <span class="icon">
-                <ion-icon name="home-outline"></ion-icon>
-              </span>
-              <span class="title">go to home</span>
-            </a>
-          </li>
-          <li>
-            <a href="/dashboard" class="nav">
-              <span class="icon">
-                <ion-icon name="home-outline"></ion-icon>
-              </span>
-              <span class="title">Dashboard</span>
-            </a>
-          </li>
-          <li>
-            <a href="/student" class="nav">
-              <span class="icon">
-                <ion-icon name="people-outline"></ion-icon>
-              </span>
-              <span class="title">Students</span>
-            </a>
-          </li>
-          <li>
-            <a href="/admin/studentOnline" class="nav">
-              <span class="icon">
-                <ion-icon name="people-outline"></ion-icon>
-              </span>
-              <span class="title">studentOnline</span>
-            </a>
-          </li>
-          <li>
-            <a href="/lesson" class="nav">
-              <span class="icon">
-                <ion-icon name="videocam-outline"></ion-icon>
-              </span>
-              <span class="title">Lessons</span>
-            </a>
-          </li>
-          <li>
-            <a href="/admin/homework" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">Homework</span>
-            </a>
-          </li>
-          <li>
-            <a href="/showStudentsDegree/homework" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">show Homework Degree</span>
-            </a>
-          </li>
+   WHAT THE OLD PAGE DID
+     · Rendered EVERY matching student in one unpaginated table. The only
+       filter was the group dropdown; with a real roster this is one <tr> per
+       student on every load.
+     · The filter <form> lived INSIDE .topbar, and its <select> was styled with
+       `style="margin: 0 5px; width: 130px; height: 25px"` — a 25px control
+       with no <label>, so screen readers announced an unnamed combobox.
+     · Its placeholder <option> was `disabled selected hidden` with
+       value="All", so after filtering by Monday the control snapped back to
+       "Select Group" and gave no indication of the active filter.
+     · Both row actions were GET links styled with inline `background-color`.
+       `/removestudent/:id` DELETED A STUDENT ON GET — a crawler, a link
+       prefetch, or a mis-click was enough, with no confirmation and no CSRF.
+       Delete is a POST form now.
+     · `<td style="display: flex">` — a flex table cell drops out of the table
+       layout algorithm, so that column no longer aligned with its header.
+     · Printed raw `undefined` in every empty cell, because interpolating
+       `i.group` on a student with no group renders the string "undefined".
+     · Built "Grade&Specialization" by string-concatenating
+       `i.grade + " &"` — and `&` unescaped in text is an invalid entity start.
+     · Title was "Uesrs" (sic), in English, on an Arabic platform.
 
-          <li>
-            <a href="/admin/quiz" class="nav">
-              <span class="icon">
-                <ion-icon name="clipboard-outline"></ion-icon>
-              </span>
-              <span class="title">Quiz</span>
-            </a>
-          </li>
-          <li>
-            <a href="/showStudentsDegree/quiz" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">show Quiz Degree</span>
-            </a>
-          </li>
-          <li>
-            <a href="/admin/exam" class="nav">
-              <span class="icon">
-                <ion-icon name="book-outline"></ion-icon>
-              </span>
-              <span class="title">Exam</span>
-            </a>
-          </li>
-          <li>
-            <a href="/showStudentsDegree/exam" class="nav">
-              <span class="icon">
-                <ion-icon name="newspaper-outline"></ion-icon>
-              </span>
-              <span class="title">show Exam Degree</span>
-            </a>
-          </li>
-          
-          <li>
-            <a href="/sign" class="nav">
-              <button class="signout nav">
-                <span class="icon">
-                  <ion-icon name="log-in-outline"></ion-icon>
-                </span>
-                <span class="title">Add Student</span>
-              </button>
-            </a>
-          </li>
-        </ul>
-      </div>
+   LOCALS  (all guarded)
+     students  Array  the current page of students
+     total     Number matching count across all pages
+     page      Number 1-based
+     pages     Number total page count
+     group     String active group filter ("" or "All" = none)
+     q         String active free-text search
+     limit     Number rows per page
+   ====================================================================== */
 
-      <div class="main">
-        <div class="topbar">
-          <div class="toggle">
-            <ion-icon name="menu-outline"></ion-icon>
-          </div>
+var rows =
+  typeof students !== "undefined" && Array.isArray(students) ? students : [];
+var totalRows =
+  typeof total !== "undefined" && total != null ? Number(total) : rows.length;
+var curPage = typeof page !== "undefined" && page ? Number(page) : 1;
+var numPages = typeof pages !== "undefined" && pages ? Number(pages) : 1;
+var perPage = typeof limit !== "undefined" && limit ? Number(limit) : 25;
+var curGroup = typeof group !== "undefined" && group ? String(group) : "";
+var curQ = typeof q !== "undefined" && q ? String(q) : "";
 
-          <div class="users">
-            <form method="get" action="/student">
-              <select
-                name="group"
-                id="group"
-                style="margin: 0 5px; width: 130px; height: 25px"
+if (!isFinite(curPage) || curPage < 1) curPage = 1;
+if (!isFinite(numPages) || numPages < 1) numPages = 1;
+
+var SUBJECTS = { biology: "الأحياء", geology: "الجيولوجيا" };
+var GRADES = {
+  "1st": "الصف الأول",
+  "2nd": "الصف الثاني",
+  "3rd": "الصف الثالث"
+};
+
+/* Value stays English — it is what the DB stores and what the route filters
+   on. Only the label is translated. */
+var GROUPS = [
+  { value: "OnlineStudent", label: "أونلاين" },
+  { value: "Saturday", label: "السبت" },
+  { value: "Sunday", label: "الأحد" },
+  { value: "Monday", label: "الاثنين" },
+  { value: "Tuesday", label: "الثلاثاء" },
+  { value: "Wednesday", label: "الأربعاء" },
+  { value: "Thursday", label: "الخميس" },
+  { value: "Friday", label: "الجمعة" }
+];
+
+var GROUP_LABEL = {};
+for (var gi = 0; gi < GROUPS.length; gi++) {
+  GROUP_LABEL[GROUPS[gi].value] = GROUPS[gi].label;
+}
+
+/* Page links must carry the current filter and search, or paging silently
+   resets them. encodeURIComponent on both — a group value or a search term
+   containing & would otherwise inject a query parameter. */
+var pageHref = function (p) {
+  var qs = "?page=" + p;
+  if (curGroup && curGroup !== "All") qs += "&group=" + encodeURIComponent(curGroup);
+  if (curQ) qs += "&q=" + encodeURIComponent(curQ);
+  return "/student" + qs;
+};
+
+var firstRow = totalRows ? (curPage - 1) * perPage + 1 : 0;
+var lastRow = Math.min(curPage * perPage, totalRows);
+
+var ICON = {
+  users:
+    "M16 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 1a3 3 0 1 0-3-3 3 3 0 0 0 3 3Zm0 2c-2.7 0-6 1.3-6 4v3h8v-3a5 5 0 0 1 1.5-3.4A10 10 0 0 0 8 14Zm8 0c-3 0-8 1.5-8 4.5V21h16v-2.5c0-3-5-4.5-8-4.5Z",
+  search:
+    "M10 2a8 8 0 1 0 4.9 14.3l5.4 5.4 1.4-1.4-5.4-5.4A8 8 0 0 0 10 2Zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Z",
+  edit: "M4 17.2 16.4 4.8l2.8 2.8L6.8 20H4v-2.8Zm14.9-11-1.3-1.3 1.4-1.4 1.3 1.3-1.4 1.4Z",
+  trash: "M8 2h8v2h5v2H3V4h5V2Zm-3 6h14l-1 14H6L5 8Zm4 2v10h2V10H9Zm4 0v10h2V10h-2Z",
+  plus: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"
+};
+%>
+
+<form class="toolbar" method="get" action="/student">
+  <div class="toolbar__field">
+    <label class="label" for="q">بحث بالاسم أو رقم الهاتف أو الكارت</label>
+    <input
+      class="input"
+      type="search"
+      id="q"
+      name="q"
+      value="<%= curQ %>"
+      placeholder="اكتب اسمًا أو رقمًا…"
+      autocomplete="off"
+    />
+  </div>
+
+  <div class="toolbar__field">
+    <label class="label" for="group">المجموعة</label>
+    <select class="select" id="group" name="group">
+      <%
+      /* The active value is marked selected on the real option, so the closed
+         dropdown shows the filter that is actually applied. */
+      var isAll = !curGroup || curGroup === "All";
+      %>
+      <option value="All"<%= isAll ? " selected" : "" %>>كل المجموعات</option>
+      <% for (var g = 0; g < GROUPS.length; g++) { %>
+      <option
+        value="<%= GROUPS[g].value %>"
+        <%= curGroup === GROUPS[g].value ? " selected" : "" %>
+      >
+        <%= GROUPS[g].label %>
+      </option>
+      <% } %>
+    </select>
+  </div>
+
+  <div class="toolbar__actions">
+    <button class="btn" type="submit">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="<%= ICON.search %>" />
+      </svg>
+      بحث
+    </button>
+
+    <% if (curQ || (curGroup && curGroup !== "All")) { %>
+    <a class="btn btn--ghost" href="/student">إلغاء التصفية</a>
+    <% } %>
+
+    <a class="btn btn--ghost" href="/addStudent">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="<%= ICON.plus %>" />
+      </svg>
+      إضافة طالب
+    </a>
+  </div>
+</form>
+
+<section class="panel">
+  <div class="panel__head">
+    <h2 class="panel__title">قائمة الطلاب</h2>
+    <span class="pager__count">
+      <% if (totalRows) { %>
+      عرض <span class="num" dir="ltr"><%= firstRow %>–<%= lastRow %></span>
+      من <span class="num" dir="ltr"><%= totalRows %></span>
+      <% } else { %>
+      لا نتائج
+      <% } %>
+    </span>
+  </div>
+
+  <% if (!rows.length) { %>
+  <div class="empty-state">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="<%= ICON.users %>" />
+    </svg>
+    <% if (curQ || (curGroup && curGroup !== "All")) { %>
+    <p class="empty-state__title">لا طالب يطابق هذا البحث</p>
+    <p>جرّب اسمًا آخر أو <a href="/student">أعد ضبط التصفية</a>.</p>
+    <% } else { %>
+    <p class="empty-state__title">لا يوجد طلاب مسجلون بعد</p>
+    <p>أضف أول طالب من صفحة «إضافة طالب».</p>
+    <% } %>
+  </div>
+
+  <% } else { %>
+  <div class="table-scroll">
+    <table class="table">
+      <caption class="sr-only">قائمة الطلاب المسجلين، مع إمكانية التعديل والحذف</caption>
+      <thead>
+        <tr>
+          <th scope="col">الاسم</th>
+          <th scope="col">المجموعة</th>
+          <th scope="col">الصف</th>
+          <th scope="col">المادة</th>
+          <th scope="col">رقم الهاتف</th>
+          <th scope="col">رقم الكارت</th>
+          <th scope="col">الصلاحية</th>
+          <th scope="col">إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (var r = 0; r < rows.length; r++) { var st = rows[r] || {}; %>
+        <tr>
+          <td class="table__name"><%= st.fullName || "—" %></td>
+
+          <td>
+            <% if (st.group) { %>
+            <span class="badge"><%= GROUP_LABEL[st.group] || st.group %></span>
+            <% } else { %>—<% } %>
+          </td>
+
+          <td>
+            <% if (st.grade) { %>
+            <span class="tag"><%= GRADES[st.grade] || st.grade %></span>
+            <% } else { %>—<% } %>
+          </td>
+
+          <td>
+            <%= st.educetionlevel ? (SUBJECTS[st.educetionlevel] || st.educetionlevel) : "—" %>
+          </td>
+
+          <td>
+            <% if (st.phoneNumber) { %>
+            <a class="table__tel" href="tel:<%= st.phoneNumber %>" dir="ltr"><%= st.phoneNumber %></a>
+            <% } else { %>—<% } %>
+          </td>
+
+          <td>
+            <% if (st.cardNumber) { %>
+            <span class="table__code" dir="ltr"><%= st.cardNumber %></span>
+            <% } else { %>—<% } %>
+          </td>
+
+          <td>
+            <% if (st.admin === "true") { %>
+            <span class="badge badge--admin">مشرف</span>
+            <% } else { %>
+            <span class="badge">طالب</span>
+            <% } %>
+          </td>
+
+          <td>
+            <div class="row-actions">
+              <a class="btn btn--ghost btn--sm" href="/editStudent/<%= st._id %>">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="<%= ICON.edit %>" />
+                </svg>
+                تعديل
+              </a>
+
+              <%
+              /* POST, not a GET link: a GET delete fires on prefetch, on a
+                 crawler visit, and on any accidental navigation. The CSRF
+                 token is what stops a third-party page submitting this form
+                 with the admin's own cookie. data-confirm is read by
+                 admin.js; if JS is unavailable the delete still works, it
+                 just asks nothing first. */
+              %>
+              <form
+                method="post"
+                action="/removestudent/<%= st._id %>"
+                data-confirm="هل تريد حذف «<%= st.fullName || "هذا الطالب" %>» نهائيًا؟"
               >
-                <option
-                  name="group"
-                  value="All"
-                  class="placeholder"
-                  disabled
-                  selected
-                  hidden
-                >
-                  Select Group
-                </option>
-                <option name="group" value="All">All</option>
-
-                <option name="group" value="OnlineStudent">
-                  OnlineStudent
-                </option>
-                <option name="group" value="Monday">Monday</option>
-                <option name="group" value="Tuesday">Tuesday</option>
-                <option name="group" value="Wednesday">Wednesday</option>
-                <option name="group" value="Thursday">Thursday</option>
-                <option name="group" value="Friday">Friday</option>
-                <option name="group" value="Saturday">Saturday</option>
-                <option name="group" value="Sunday">Sunday</option>
-              </select>
-              <button>Search</button>
-            </form>
-
-            <br />
-
-            <div class="customers">
-              <div class="cardHeader">
-                <h2>Users</h2>
-              </div>
-              <table>
-                <thead>
-                  <tr>
-                    <td>Name</td>
-                    <td>Group</td>
-                    <td>Grade&Specialization</td>
-
-                    <td>phoneNumber</td>
-                    <td>NumCard</td>
-                    <td>isAdmin</td>
-                    <td style="text-align: center">Action</td>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% for(let i of student){%>
-                  <tr>
-                    <td><%=i.fullName%></td>
-                    <td><%=i.group%></td>
-
-                    <td>
-                      <%=(i.grade != undefined) ? (i.grade +" &" ) : "" ; %>
-                      <%=i.educetionlevel%>
-                    </td>
-                    <td><%=i.phoneNumber%></td>
-                    <td><%=i.cardNumber%></td>
-                    <td><%=i.admin =="true"? "admin" :"student"%></td>
-                    <td style="display: flex">
-                      <a
-                        style="
-                          background-color: green;
-                          border-radius: 0.5rem;
-                          padding: 0.5rem 0.5rem;
-                          color: var(--white);
-                        "
-                        href="/editStudent/<%=i._id %>"
-                        ><i class="fas fa-trash"></i> edit</a
-                      >
-                      <a
-                        style="
-                          margin: 0 5px;
-
-                          background-color: brown;
-                          border-radius: 0.5rem;
-                          padding: 0.5rem 0.5rem;
-                          color: var(--white);
-                        "
-                        href="/removestudent/<%=i._id %>"
-                        ><i class="fas fa-trash"></i> delete</a
-                      >
-                    </td>
-                  </tr>
-                  <%}%>
-                </tbody>
-              </table>
+                <% if (typeof csrfToken !== "undefined" && csrfToken) { %>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <% } %>
+                <button class="btn btn--danger btn--sm" type="submit">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="<%= ICON.trash %>" />
+                  </svg>
+                  حذف
+                </button>
+              </form>
             </div>
-          </div>
-        </div>
-      </div>
+          </td>
+        </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <% if (numPages > 1) { %>
+  <nav class="pager" aria-label="تصفّح الصفحات">
+    <span class="pager__count">
+      صفحة <span class="num" dir="ltr"><%= curPage %></span>
+      من <span class="num" dir="ltr"><%= numPages %></span>
+    </span>
+
+    <div class="pager__nav">
+      <%
+      /* "Previous" points at a lower page number. In RTL the previous control
+         belongs on the right, which is where the first flex item lands under
+         dir="rtl" — no ordering override needed, and the arrow glyphs are
+         chosen to match: previous points right, next points left. */
+      %>
+      <% if (curPage > 1) { %>
+      <a class="btn btn--ghost btn--sm" href="<%= pageHref(curPage - 1) %>" rel="prev">
+        <span aria-hidden="true">→</span> السابق
+      </a>
+      <% } else { %>
+      <span class="btn btn--ghost btn--sm" aria-disabled="true">
+        <span aria-hidden="true">→</span> السابق
+      </span>
+      <% } %>
+
+      <% if (curPage < numPages) { %>
+      <a class="btn btn--ghost btn--sm" href="<%= pageHref(curPage + 1) %>" rel="next">
+        التالي <span aria-hidden="true">←</span>
+      </a>
+      <% } else { %>
+      <span class="btn btn--ghost btn--sm" aria-disabled="true">
+        التالي <span aria-hidden="true">←</span>
+      </span>
+      <% } %>
     </div>
-    <script src="../admin/dashboard/assets/js/main.js"></script>
-    <script
-      type="module"
-      src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"
-    ></script>
-    <script
-      nomodule
-      src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"
-    ></script>
-  </body>
-</html>
+  </nav>
+  <% } %>
+  <% } %>
+</section>
+
+<%- include("_foot") %>

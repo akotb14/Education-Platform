@@ -1,0 +1,521 @@
+/*
+  Shared listing chrome — used by month.ejs (/:edu/:grd) and units.ejs
+  (/lessons/:edu/:grade/:month).
+
+  Both pages are the same shape: a tinted page hero with breadcrumbs and meta
+  chips, then a grid of tiles that are either open (a link) or locked/inert.
+  They differ only in what a tile represents — a month, or a unit inside one.
+
+  LAYERS ON TOP OF home.css — it is not a replacement. Both pages reuse
+  .site-header, .site-nav, .container, .section, .card (and its 3D tilt),
+  .contact__*, .site-footer, .reveal and .to-top verbatim, so the only rules
+  here are the ones those pages genuinely add.
+
+  That reuse is free rather than wasteful: the four course cards on the
+  homepage are the only entry point into this flow, so every visitor arrives
+  with home.css and home.js already in cache.
+
+  Load order in each view is tokens.css -> home.css -> listing.css. Nothing
+  here restates a home.css rule; it only adds .page-hero, .crumbs, .term,
+  .tile, .empty and .notice.
+
+  Breakpoints follow the canonical set documented in tokens.css:
+      sm 560px  ·  md 768px  ·  lg 992px  ·  xl 1200px
+*/
+
+/* ------------------------------------------------------------- page hero ---
+   Kept deliberately light. .site-header starts out fully transparent and only
+   gains its glass background once scrolled, so whatever sits underneath it has
+   to carry dark-on-light nav text. A dark banner here would make the nav
+   unreadable for the first ~80px of scroll. */
+.page-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding-block: calc(var(--header-h) + var(--sp-6)) var(--sp-8);
+  background: linear-gradient(180deg, var(--c-primary-tint) 0%, var(--c-surface) 100%);
+  border-block-end: 1px solid var(--c-line);
+  /* Pull up under the sticky header so the tint starts at the very top of the
+     viewport instead of leaving a white band above it. */
+  margin-block-start: calc(var(--header-h) * -1);
+}
+
+/* Decorative grid. -1 keeps it under the content without needing a z-index on
+   every child. */
+.page-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: linear-gradient(
+      to left,
+      rgb(254 63 64 / 0.07) 1px,
+      transparent 1px
+    ),
+    linear-gradient(to bottom, rgb(254 63 64 / 0.07) 1px, transparent 1px);
+  background-size: 46px 46px;
+  /* Symmetric mask — no left/right term, so nothing to mirror in RTL. */
+  mask-image: radial-gradient(120% 90% at 50% 0%, #000 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(
+    120% 90% at 50% 0%,
+    #000 30%,
+    transparent 75%
+  );
+}
+
+.page-hero__inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  align-items: flex-start;
+}
+
+.page-hero__title {
+  font-size: var(--fs-h1);
+  font-weight: 800;
+  line-height: var(--lh-tight);
+  /* Positive tracking breaks Arabic cursive joining — pin it to 0. */
+  letter-spacing: 0;
+  color: var(--c-ink);
+  margin: 0;
+}
+
+.page-hero__title em {
+  font-style: normal;
+  background: var(--grad-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.page-hero__lede {
+  max-width: 60ch;
+  margin: 0;
+  font-size: var(--fs-lg);
+  color: var(--c-muted);
+}
+
+/* ----------------------------------------------------------- breadcrumbs ---
+   A real <nav><ol>, so the trail is announced as a list rather than as loose
+   links. The separator lives in CSS and is hidden from the accessibility tree
+   via aria-hidden on a span in the markup. */
+.crumbs {
+  font-size: var(--fs-sm);
+}
+
+.crumbs__list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crumbs a {
+  color: var(--c-muted);
+  text-decoration: none;
+  border-block-end: 1px solid transparent;
+  transition: color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
+}
+
+.crumbs a:hover,
+.crumbs a:focus-visible {
+  color: var(--c-primary);
+  border-block-end-color: currentColor;
+}
+
+.crumbs [aria-current="page"] {
+  color: var(--c-ink);
+  font-weight: 700;
+}
+
+.crumbs__sep {
+  color: var(--c-line);
+}
+
+/* ------------------------------------------------------------------ meta ---
+   Chips summarising subject / grade / unlocked count. */
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--c-ink);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-pill);
+  box-shadow: var(--sh-1);
+}
+
+.chip svg {
+  inline-size: 1em;
+  block-size: 1em;
+  flex: none;
+}
+
+.chip--primary {
+  color: var(--c-primary);
+  border-color: rgb(254 63 64 / 0.25);
+  background: var(--c-primary-tint);
+}
+
+.chip--accent {
+  color: #0b6fa4;
+  border-color: rgb(3 164 237 / 0.25);
+  background: var(--c-accent-tint);
+}
+
+/* Latin digit runs inside an RTL line reorder visually when separated by a
+   neutral. Every count is isolated so "3 / 10" cannot render as "10 / 3". */
+.num {
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------- term groups ---
+   Months come back from Mongo in insertion order, which is arbitrary. The view
+   sorts them and splits them by term; this is the heading for each block. */
+.term + .term {
+  margin-block-start: var(--sp-8);
+}
+
+.term__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  margin-block-end: var(--sp-5);
+}
+
+.term__title {
+  font-size: var(--fs-h3);
+  font-weight: 800;
+  letter-spacing: 0;
+  color: var(--c-ink);
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Fills the remaining width beside the title. */
+.term__rule {
+  flex: 1;
+  block-size: 1px;
+  background: linear-gradient(to left, var(--c-line), transparent);
+  border: 0;
+  margin: 0;
+}
+
+[dir="ltr"] .term__rule {
+  background: linear-gradient(to right, var(--c-line), transparent);
+}
+
+/* ------------------------------------------------------------ month card ---
+   Built on .card, so it inherits the 3D tilt, the cursor spotlight, the hover
+   lift and the reduced-motion handling from home.css. Only the numbered head
+   is new.
+
+   The old markup repeated /assets/images/mervatr.jpg as the media for every
+   single month, so ten cards showed ten copies of the same portrait and
+   carried ten more image requests. A numbered tile identifies the month at a
+   glance and costs nothing to load. */
+.tile-grid {
+  display: grid;
+  gap: var(--sp-5);
+  grid-template-columns: 1fr;
+}
+
+/* `.tile` itself carries no declarations on purpose — everything it would
+   have said is already said by `.card` in home.css. It stays in the markup as
+   the block name that `.tile__num`, `.tile__title`, `.tile__lock` and
+   `.tile--locked` hang off, so the class list reads as one component instead
+   of four unrelated names. */
+
+@media (min-width: 560px) {
+  .tile-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 992px) {
+  .tile-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1200px) {
+  .tile-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.tile__num {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 7;
+  overflow: hidden;
+  background: var(--grad-brand);
+  color: #fff;
+  font-size: clamp(2.25rem, 5vw, 3rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+  /* Both top corners, direction-agnostic. */
+  border-start-start-radius: var(--r-lg);
+  border-start-end-radius: var(--r-lg);
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Soft highlight so the flat gradient reads as a surface rather than a block.
+   at 50% 0% is symmetric, so RTL needs no variant. */
+.tile__num::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    100% 120% at 50% 0%,
+    rgb(255 255 255 / 0.38),
+    transparent 65%
+  );
+}
+
+.tile__num span {
+  position: relative;
+}
+
+.tile__title {
+  font-size: var(--fs-h4);
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--c-ink);
+  margin: 0;
+}
+
+.tile__hint {
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
+  margin: 0;
+}
+
+/* ------------------------------------------------------------- badges -----
+   Units page only. A unit row carries a Drive video id (`lesson`), a `pdf`
+   path and an optional `quizId`, any of which may be empty — so the tile says
+   up front what is actually inside instead of making the student open it to
+   find out.
+
+   Presence-only: a missing piece renders no badge rather than a greyed one,
+   so the row stays quiet when a unit has just the video. */
+.tile__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-block-start: var(--sp-1);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 2px var(--sp-2);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1.6;
+  color: var(--c-muted);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+}
+
+.badge svg {
+  inline-size: 0.95em;
+  block-size: 0.95em;
+  flex: none;
+}
+
+.badge--video {
+  color: #b3242f;
+  background: var(--c-primary-tint);
+  border-color: rgb(254 63 64 / 0.22);
+}
+
+.badge--quiz {
+  color: #0b6fa4;
+  background: var(--c-accent-tint);
+  border-color: rgb(3 164 237 / 0.22);
+}
+
+/* --------------------------------------------------------- locked months ---
+   Rendered as a <div>, never an <a>: /lessons/... is guarded by isMonth, which
+   answers a bare 404. Linking to a guaranteed 404 would be worse than not
+   linking at all, so a locked card carries no href and no tab stop, and says
+   how to unlock it instead. */
+.tile--locked {
+  background: var(--c-surface-alt);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.tile--locked .tile__num {
+  background: #dcdcdc;
+  color: #8a8a8a;
+}
+
+.tile--locked .tile__title {
+  color: var(--c-muted);
+}
+
+/* .card::after is the pointer spotlight; a locked card never lights up. */
+.tile--locked::after {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tile--locked:hover {
+    --lift: 0px;
+    border-color: var(--c-line);
+    box-shadow: none;
+  }
+}
+
+.tile__lock {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-block-start: auto;
+  padding-block-start: var(--sp-3);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--c-muted);
+}
+
+.tile__lock svg {
+  inline-size: 1.1em;
+  block-size: 1.1em;
+  flex: none;
+}
+
+/* ------------------------------------------------------- empty / notice ---
+   The single biggest gap in the old page: when a student had no months
+   unlocked the loop produced nothing at all, leaving a heading floating above
+   blank space with no explanation and no way forward. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+  max-width: var(--container-narrow);
+  margin-inline: auto;
+  padding: var(--sp-8) var(--sp-5);
+  text-align: center;
+  background: var(--c-surface);
+  border: 1px dashed var(--c-line);
+  border-radius: var(--r-lg);
+}
+
+.empty__icon {
+  display: grid;
+  place-items: center;
+  inline-size: 72px;
+  block-size: 72px;
+  border-radius: 50%;
+  color: var(--c-primary);
+  background: var(--c-primary-tint);
+}
+
+.empty__icon svg {
+  inline-size: 34px;
+  block-size: 34px;
+}
+
+.empty__title {
+  font-size: var(--fs-h3);
+  font-weight: 800;
+  letter-spacing: 0;
+  color: var(--c-ink);
+  margin: 0;
+}
+
+.empty__text {
+  margin: 0;
+  color: var(--c-muted);
+}
+
+.empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  justify-content: center;
+  margin-block-start: var(--sp-2);
+}
+
+/* Shown when the signed-in student's own level/grade does not match the one in
+   the URL — previously an indistinguishable blank page. */
+.notice {
+  display: flex;
+  gap: var(--sp-4);
+  align-items: flex-start;
+  max-width: var(--container-narrow);
+  margin-inline: auto;
+  padding: var(--sp-5);
+  background: var(--c-accent-tint);
+  border: 1px solid rgb(3 164 237 / 0.3);
+  /* Accent bar on the reading edge — start-start/start-end keep it on the
+     right in RTL and the left in LTR without an override. */
+  border-start-start-radius: var(--r-md);
+  border-end-start-radius: var(--r-md);
+  border-inline-start: 4px solid var(--c-accent);
+}
+
+.notice svg {
+  inline-size: 24px;
+  block-size: 24px;
+  flex: none;
+  color: #0b6fa4;
+}
+
+.notice p {
+  margin: 0;
+}
+
+.notice strong {
+  color: var(--c-ink);
+}
+
+/* ----------------------------------------------------------- reveal stagger
+   home.js adds .is-visible; home.css owns the transition. Only the per-card
+   delay is page-specific. Capped at 6 so a 20-month grid does not end with a
+   card that waits two full seconds. */
+.js .tile-grid .reveal:nth-child(2) {
+  transition-delay: 60ms;
+}
+.js .tile-grid .reveal:nth-child(3) {
+  transition-delay: 120ms;
+}
+.js .tile-grid .reveal:nth-child(4) {
+  transition-delay: 180ms;
+}
+.js .tile-grid .reveal:nth-child(5) {
+  transition-delay: 240ms;
+}
+.js .tile-grid .reveal:nth-child(n + 6) {
+  transition-delay: 300ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js .tile-grid .reveal {
+    transition-delay: 0ms !important;
+  }
+}

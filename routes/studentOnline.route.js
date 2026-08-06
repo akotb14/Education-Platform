@@ -50,25 +50,41 @@ const csrfProtect = csrf({ cookie: true });
 //   }
 // });
 
-route.get("/admin/studentOnline", isAdmin, async (req, res) => {
+route.get("/admin/studentOnline", isAdmin, csrfProtect, async (req, res, next) => {
   try {
-    let mo = await model.find({});
+    let mo = await model.find({}).lean();
 
-    res.render("admin/onlinestudent.ejs", { student: mo });
+    res.render("admin/onlinestudent.ejs", {
+      student: mo,
+      /* The per-row delete is a POST form now, so the page needs a token. */
+      csrfToken: req.csrfToken(),
+    });
   } catch (err) {
-    console.log(err);
-
-    res.sendStatus(400);
+    /* Was `console.log(err); res.sendStatus(400)` — a server-side DB failure
+       reported as a client error, with no body to say so. */
+    next(err);
   }
 });
 
-route.get("/removeStudentOnline/:id", async (req, res) => {
+/* THIS ROUTE HAD NO AUTH AT ALL.
+
+   It was `route.get("/removeStudentOnline/:id", ...)` with no isAdmin — any
+   unauthenticated visitor who knew or guessed a document id could delete a
+   join request, by GET, from a plain link. Every other admin route in the
+   file is guarded; this one was simply missed.
+
+   Three changes: POST instead of GET (a GET delete fires on prefetch and on
+   any crawler visit), csrfProtect so a third-party page cannot submit it with
+   the admin's cookie, and the isAdmin guard the route always needed. */
+route.post("/removeStudentOnline/:id", csrfProtect, isAdmin, async (req, res, next) => {
   try {
     await model.findByIdAndDelete({ _id: req.params.id });
 
     res.redirect("/admin/studentOnline");
   } catch (err) {
-    res.redirect("/admin/studentOnline");
+    /* The old catch redirected on failure too, so a delete that threw looked
+       exactly like one that succeeded. */
+    next(err);
   }
 });
 

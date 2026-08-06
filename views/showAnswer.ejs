@@ -1,75 +1,370 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar" dir="rtl">
   <head>
-    <title>كوين الاحياء والچيولوچيا</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#fe3f40" />
+
+    <%
+      /* =====================================================================
+         ANSWER KEY — rendered by routes/showAnswer.router.js
+             GET /showAnswer/:id   with { data, score, outOf, kind, backHref }
+
+         ACCESS. This page prints every correct answer, and until now the route
+         checked nothing beyond "is this cookie a valid JWT". Any logged-in
+         student could read the key for any quiz on the platform, in any grade,
+         including one they had not sat and one still inside its exam window —
+         verified live against a running server. The route now requires a
+         submitted degreeQuiz record for this student and this quiz, so the key
+         is only reachable after their own attempt is graded.
+
+         LOCALS
+           data      the quiz document; `quiz` holds the questions
+           score     this student's total, or null
+           outOf     number of questions the score was out of, or null
+           kind      "quiz" | "exam" | "homework"
+           backHref  where the back link goes
+
+         All read behind typeof guards: under EJS's `with(locals)` an
+         unguarded reference to a key that was never passed is a ReferenceError,
+         and render errors bypass the route's own try/catch — Express hands them
+         to its error handler, so the student gets a bare 500. */
+
+      var kindRaw = typeof kind !== "undefined" && kind ? String(kind) : "quiz";
+      var KINDS = { quiz: "الكويز", exam: "الامتحان", homework: "الواجب" };
+      var kindName = KINDS[kindRaw] || KINDS.quiz;
+
+      var doc = (typeof data !== "undefined" && data && typeof data === "object") ? data : null;
+      var title = doc && doc.nameQuiz ? String(doc.nameQuiz) : "";
+
+      var rows = [];
+      var all = doc && Array.isArray(doc.quiz) ? doc.quiz : [];
+      for (var i = 0; i < all.length; i++) {
+        var q = all[i];
+        if (!q) continue;
+
+        /* The old template did `for (j of data['quiz'][i].answer[0])` with no
+           guard at all. The admin add-question handler stores
+           answer: [req.body.answer], so a question saved with no options at
+           all holds [undefined] — and `for..of undefined` throws
+           "answer[0] is not iterable" mid-render, taking down the whole page
+           rather than the one question. Reproduced against the real template
+           before rewriting. */
+        var opts = [];
+        var raw = q.answer && Array.isArray(q.answer) ? q.answer[0] : null;
+        if (raw && typeof raw.length === "number") {
+          for (var o = 0; o < raw.length; o++) {
+            var v = raw[o] == null ? "" : String(raw[o]).trim();
+            if (v) opts.push(v);
+          }
+        }
+
+        var correct = q.correctAnswer == null ? "" : String(q.correctAnswer).trim();
+
+        /* Uploaded question images land in ./images/ (middlewares/upload.js),
+           mounted at the root by app.js, so the file is served at /<filename>.
+
+           The old code was image.split('\\')[1] || image.split('/')[1] — the
+           SECOND segment rather than the last, so any path deeper than one
+           level rendered src="/". */
+        var img = q.image ? String(q.image).trim() : "";
+        var imgName = img ? img.split(/[\\/]/).pop() : "";
+
+        rows.push({
+          question: q.question == null ? "" : String(q.question),
+          options: opts,
+          correct: correct,
+          /* The key is worth nothing if the correct answer is not among the
+             options — that happens when an option was edited after the fact,
+             and the old page just silently showed no highlight. */
+          orphan: correct !== "" && opts.indexOf(correct) === -1,
+          img: imgName ? "/" + encodeURIComponent(imgName) : ""
+        });
+      }
+
+      var sc = typeof score !== "undefined" && score != null && String(score) !== "" ? Number(score) : null;
+      if (sc !== null && isNaN(sc)) sc = null;
+      var of_ = typeof outOf !== "undefined" && outOf != null ? Number(outOf) : rows.length;
+      if (isNaN(of_) || of_ <= 0) of_ = rows.length;
+      /* Under half is flagged in red, matching .hw-card__score--low. */
+      var low = sc !== null && of_ > 0 && sc / of_ < 0.5;
+
+      var exitHref = typeof backHref !== "undefined" && backHref ? String(backHref) : "/";
+
+      /* Set by the route when the student has no submitted attempt for this
+         paper, so the empty state can say why rather than implying the key is
+         missing. */
+      var locked = typeof isLocked !== "undefined" && !!isLocked;
+    %>
+
+    <meta name="robots" content="noindex, nofollow" />
+    <title>
+      نموذج الإجابة<%= title ? " — " + title : "" %> | منصة أ/ مرڤت عبدالرحمن
+    </title>
+
     <link rel="icon" type="image/png" href="/assets/images/logo.png" />
 
-    <link rel="stylesheet" href="../show answer/style.css" />
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="/assets/css/tokens.css" />
+    <link rel="stylesheet" href="/assets/css/home.css" />
+    <link rel="stylesheet" href="/assets/css/listing.css" />
+    <link rel="stylesheet" href="/assets/css/quiz.css" />
+
+    <!-- No quiz.js here: nothing on this page is timed or submittable. The old
+         page loaded "../../show answer/script.js" — a zero-byte file, at a path
+         with an unencoded space in it, two directories above the mount root. -->
+    <script src="/assets/js/home.js" defer></script>
   </head>
+
   <body oncontextmenu="return false;">
-    <div class="quizContainer container-fluid well well-lg">
-      <div id="quiz1" class="text-center">
-        <h2
-          style="color: #d14040; position: center; left: 80%; top: 0%"
-          align="Center"
+    <a class="sr-only" href="#main">تخطي إلى المحتوى</a>
+
+    <div class="scroll-progress" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="container site-header__inner">
+        <a class="site-logo" href="/">
+          <img
+            src="/assets/images/logo.png"
+            alt="منصة أ/ مرڤت عبدالرحمن"
+            width="960"
+            height="960"
+          />
+        </a>
+
+        <button
+          class="nav-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="site-nav"
         >
-          نموذج الاجابه
-          <br />
-        </h2>
+          <span class="sr-only">القائمة</span>
+          <span class="nav-toggle__bars" aria-hidden="true"></span>
+        </button>
+
+        <nav class="site-nav" id="site-nav" aria-label="التنقل الرئيسي">
+          <ul class="site-nav__list">
+            <li><a class="site-nav__link" href="/#courses">الصفوف</a></li>
+            <li><a class="site-nav__link" href="/#activities">الاختبارات</a></li>
+            <li><a class="site-nav__link" href="/#contact">تواصل</a></li>
+            <li>
+              <a
+                class="site-nav__link site-nav__link--cta"
+                href="/logout"
+                data-magnetic
+              >
+                تسجيل الخروج
+              </a>
+            </li>
+          </ul>
+        </nav>
       </div>
-      <% for(let i =0;i< data['quiz'].length ; i++){ %> 
-      <div class="quiz-container">
-        <% if(data['quiz'][i]['image'] !="" && data['quiz'][i]['image'] != undefined){ %> 
-          <div style="margin-bottom: 30px;">
-            <% let image = ""%>
-              <%image = data['quiz'][i]['image'].split('\\')[1] ||data['quiz'][i]['image'].split('/')[1] %>
-            <img src="/<%=image %> " alt="sa" width="400px">
-          </div>
-          <% } %> 
-          <div class="question-number" style="display: flex;
-          justify-content: flex-end;
-          ">
-     
-          <h3>
-            <%=data['quiz'][i]['question'] %>  <span class="question-num-value"></span>
-          </h3>
-        </div>
-        <br />
-        <br />
-        <br />
-        <section>
-          <div class="options">
-            <%for(j of data['quiz'][i].answer[0] ) {%> 
-              <% if(j != ''){ %> 
-            <div class="options" ><%=j %> </div>
+    </header>
+
+    <main id="main">
+      <section class="page-hero">
+        <div class="container page-hero__inner">
+          <nav class="crumbs" aria-label="مسار التصفح">
+            <ol class="crumbs__list">
+              <li><a href="/">الرئيسية</a></li>
+              <li class="crumbs__sep" aria-hidden="true">/</li>
+              <li><a href="<%= exitHref %>">العودة</a></li>
+              <li class="crumbs__sep" aria-hidden="true">/</li>
+              <li><span aria-current="page">نموذج الإجابة</span></li>
+            </ol>
+          </nav>
+
+          <!-- The old heading was inline-styled with `position: center` — not a
+               value `position` accepts, so it was dropped, along with the
+               `left`/`top` offsets that depended on it. -->
+          <h1 class="page-hero__title"><em>نموذج الإجابة</em></h1>
+
+          <% if (title) { %>
+          <p class="page-hero__lede"><%= kindName %>: <%= title %></p>
+          <% } %>
+
+          <div class="meta-row">
+            <span class="chip">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M4 6h16v2H4V6Zm0 5h16v2H4v-2Zm0 5h10v2H4v-2Z" />
+              </svg>
+              <span class="num"><%= rows.length %></span> سؤال
+            </span>
+
+            <% if (sc !== null) { %>
+            <!-- The score was never shown on this page: a student saw the key
+                 with no idea how they had done against it. -->
+            <span class="chip chip--primary">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 2 9.2 8.6 2 9.2l5.5 4.8L5.8 21 12 17.3 18.2 21l-1.7-7 5.5-4.8-7.2-.6L12 2Z" />
+              </svg>
+              درجتك <span class="num" dir="ltr"><%= sc %></span> من
+              <span class="num" dir="ltr"><%= of_ %></span>
+            </span>
             <% } %>
-            <% } %> 
           </div>
-        </section>
-        <div class="answer">
-          الاجابه الصحيحه <span><b><%=data['quiz'][i]['correctAnswer'] %></b></span>
         </div>
-        
+      </section>
+
+      <section class="section">
+        <div class="container">
+          <% if (!rows.length) { %>
+          <div class="empty">
+            <span class="empty__icon" aria-hidden="true">
+              <% if (locked) { %>
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 1a5 5 0 0 0-5 5v3H5v13h14V9h-2V6a5 5 0 0 0-5-5Zm0 2a3 3 0 0 1 3 3v3H9V6a3 3 0 0 1 3-3Zm0 11a2 2 0 0 1 1 3.7V20h-2v-2.3A2 2 0 0 1 12 14Z" />
+              </svg>
+              <% } else { %>
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z" />
+              </svg>
+              <% } %>
+            </span>
+            <% if (locked) { %>
+            <!-- The route answers 403 here. Until now it answered 200 with the
+                 full key to anybody holding a valid cookie. -->
+            <h2 class="empty__title">نموذج الإجابة غير متاح</h2>
+            <p class="empty__text">
+              يظهر نموذج الإجابة بعد أن تُسلّم محاولتك في <%= kindName %> ويتم
+              تصحيحها.
+            </p>
+            <% } else { %>
+            <h2 class="empty__title">لا يوجد نموذج إجابة</h2>
+            <p class="empty__text">
+              لم تتم إضافة أسئلة لهذا <%= kindName %>، أو تم حذفها.
+            </p>
+            <% } %>
+            <div class="empty__actions">
+              <a class="btn btn--primary" href="<%= exitHref %>" data-magnetic>
+                العودة
+              </a>
+            </div>
+          </div>
+
+          <% } else { %>
+          <div class="answer-key">
+            <% if (sc !== null) { %>
+            <div class="ak-score<%= low ? " ak-score--low" : "" %>">
+              <span class="ak-score__value" dir="ltr"><%= sc %></span>
+              <span class="ak-score__label">
+                من <span class="num" dir="ltr"><%= of_ %></span>
+              </span>
+            </div>
+            <% } %>
+
+            <% for (var r = 0; r < rows.length; r++) { var row = rows[r]; %>
+            <div class="ak-q">
+              <div class="q__head">
+                <span class="q__num" aria-hidden="true"><%= r + 1 %></span>
+                <h2 class="q__text">
+                  <span class="sr-only">السؤال <%= r + 1 %>:</span>
+                  <%= row.question %>
+                </h2>
+              </div>
+
+              <% if (row.img) { %>
+              <figure class="q__figure">
+                <img src="<%= row.img %>" alt="" loading="lazy" />
+              </figure>
+              <% } %>
+
+              <% if (!row.options.length) { %>
+              <p class="empty__text">لم يتم إضافة اختيارات لهذا السؤال.</p>
+              <% } %>
+
+              <ul class="ak-opts">
+                <% for (var p = 0; p < row.options.length; p++) { %>
+                <% var isRight = row.correct !== "" && row.options[p] === row.correct; %>
+                <li class="ak-opt<%= isRight ? " ak-opt--correct" : "" %>">
+                  <span class="ak-opt__mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z" />
+                    </svg>
+                  </span>
+                  <span class="opt__text"><%= row.options[p] %></span>
+                  <% if (isRight) { %>
+                  <!-- The word, not just the colour and tick. Colour alone is a
+                       WCAG 1.4.1 failure, and this page is read on phones in
+                       daylight. -->
+                  <span class="ak-opt__tag">الإجابة الصحيحة</span>
+                  <% } %>
+                </li>
+                <% } %>
+              </ul>
+
+              <% if (row.orphan) { %>
+              <!-- The stored correct answer is not one of the stored options.
+                   The old page showed the options with no highlight and printed
+                   the answer separately underneath, so this went unnoticed. -->
+              <p class="notice notice--warn">
+                الإجابة الصحيحة المسجلة لهذا السؤال هي
+                <strong><%= row.correct %></strong> وهي غير موجودة بين
+                الاختيارات. راجع السنتر.
+              </p>
+              <% } %>
+            </div>
+            <% } %>
+
+            <div class="lesson-back">
+              <a class="btn btn--primary" href="<%= exitHref %>" data-magnetic>
+                <span aria-hidden="true">←</span> العودة
+              </a>
+            </div>
+          </div>
+          <% } %>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>
+          © <span class="num">2026</span> جميع الحقوق محفوظة — منصة أ/ مرڤت
+          عبدالرحمن.
+        </p>
       </div>
-      <% } %> 
-     
-      <script src="../../show answer/script.js"></script>
-      <script>
-        document.onkeydown = function (e) {
-          if (event.keyCode == 123) {
-            return false;
-          }
-          if (e.ctrlKey && e.shiftKey && e.keyCode == "I".charCodeAt(0)) {
-            return false;
-          }
-          if (e.ctrlKey && e.shiftKey && e.keyCode == "J".charCodeAt(0)) {
-            return false;
-          }
-          if (e.ctrlKey && e.keyCode == "U".charCodeAt(0)) {
-            return false;
-          }
-        };
-      </script>
-    </div>
+    </footer>
+
+    <button class="to-top" type="button" data-to-top>
+      <span class="sr-only">العودة إلى أعلى الصفحة</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+        <path
+          d="M12 19V5m0 0-6 6m6-6 6 6"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </button>
+
+    <script>
+      document.onkeydown = function (e) {
+        /* `event.keyCode` in the original was a ReferenceError outside Chrome —
+           there is no implicit global `event` in Firefox or Safari. */
+        if (e.keyCode == 123) {
+          return false;
+        }
+        if (e.ctrlKey && e.shiftKey && e.keyCode == "I".charCodeAt(0)) {
+          return false;
+        }
+        if (e.ctrlKey && e.shiftKey && e.keyCode == "J".charCodeAt(0)) {
+          return false;
+        }
+        if (e.ctrlKey && e.keyCode == "U".charCodeAt(0)) {
+          return false;
+        }
+      };
+    </script>
   </body>
 </html>

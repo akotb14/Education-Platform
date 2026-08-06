@@ -1,384 +1,184 @@
-
-
-<!DOCTYPE html>
-
-<html lang="en">
-
-  <head>
-
-    <meta charset="UTF-8" />
-
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-    <link rel="stylesheet" href="../admin/dashboard/assets/css/style.css" />
-
-    <link rel="stylesheet" href="../admin/dashboard/assets/css/users.css" />
-
-    <title>Uesrs</title>
-
-  </head>
-
-  <body>
-
-    <!-- =============== Navigation ================ -->
-
-    <div class="container">
-
-      <div class="navigation">
-
-        <ul>
-
-          <li>
-
-            <a href="#" class="nav">
-
-              <span class="icon">
-
-                <img src="/logo2.png" alt="" />
-
-              </span>
-
-              <span class="title">The Quen Platform</span>
-
-            </a>
-
-          </li>
-
-
-
-          <li>
-
-            <a href="/" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="home-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">go to home</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/dashboard" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="home-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">Dashboard</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/student" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="people-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">Students</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/admin/studentOnline" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="people-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">studentOnline</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/lesson" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="videocam-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">Lessons</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/admin/homework" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="newspaper-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">Homework</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/showStudentsDegree/homework" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="newspaper-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">show Homework Degree</span>
-
-            </a>
-
-          </li>
-
-
-
-          <li>
-
-            <a href="/admin/quiz" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="clipboard-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">Quiz</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/showStudentsDegree/quiz" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="newspaper-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">show Quiz Degree</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/admin/exam" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="book-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">Exam</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/showStudentsDegree/exam" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="newspaper-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">show Exam Degree</span>
-
-            </a>
-
-          </li>
-
-          
-
-          <li>
-
-            <a href="/sign" class="nav">
-
-              <button class="signout nav">
-
-                <span class="icon">
-
-                  <ion-icon name="log-in-outline"></ion-icon>
-
-                </span>
-
-                <span class="title">Add Student</span>
-
-              </button>
-
-            </a>
-
-          </li>
-
-          
-
-        </ul>
-
-      </div>
-
-
-
-      <div class="main">
-
-        <div class="topbar">
-
-          <div class="toggle">
-
-            <ion-icon name="menu-outline"></ion-icon>
-
-          </div>
-
-          <div class="users">
-
-            <div class="customers">
-
-              <div class="cardHeader">
-
-                <h2>User Online</h2>
-
-              </div>
-
-              <table>
-
-                <thead>
-
-                  <tr>
-
-                    <td>Name</td>
-                    <td>Specialization</td>
-                    <td>Grade</td>
-
-                    <td>Phone number</td>
-
-                    <td>Group</td>
-
-                    <td>Card number</td>
-
-                    <td>Action</td>
-
-
-
-                  </tr>
-
-                </thead>
-
-                <tbody>
-
-                <% for(let i of student){%>
-
-                <tr>
-
-                  <td><%=i.fullName%></td>
-
-                  <td><%=i.educetionlevel%></td>
-                  <td><%=i.grade%></td>
-
-                  <td><%=i.phoneNumber%></td>
-
-                  <td><%=i.group%></td>
-
-                  <td><%=i.cardNumber%></td>
-
-                  <td>
-
-                    <a
-
-                      style="
-
-                        background-color: brown;
-
-                        border-radius: 0.5rem;
-
-                        padding: 0.5rem 0.5rem;
-
-                        color: var(--white);
-
-                      "
-
-                      href="/removeStudentOnline/<%=i._id%>"
-
-                      >delete</a
-
-                    >
-
-                  </td>
-
-                </tr>
-
-              <%}%>
-
-                </tbody>
-
-              </table>
-
+<%- include("_head", { active: "online", title: "طلبات الانضمام" }) %>
+<%
+/* =========================================================================
+   ONLINE / JOIN-REQUEST LIST
+
+   These are rows from the `studentOnline` collection — people who filled in
+   the "ارسال البيانات" form on the login page. They are NOT platform accounts
+   yet: the model has no `password` and no `admin` field, so nobody in this
+   table can log in. The old page called them "User Online", which reads as
+   "currently signed in" and is the opposite of what the table holds.
+
+   WHAT THE OLD PAGE DID
+     · Was 384 lines for one 7-column table, because every tag was separated by
+       a blank line and 110 of those lines were the copy-pasted sidebar.
+     · Delete was a GET link (`/removeStudentOnline/:id`) styled with inline
+       `background-color: brown`, and that route had NO isAdmin guard — it was
+       reachable by anyone who knew an id. Now a POST with the guard restored.
+     · Printed raw `undefined` for every field a request left blank.
+     · Referenced `var(--white)`, which its stylesheet never defines.
+     · Offered no way to get from a request to an actual student account; the
+       admin had to retype all five fields into the add-student form by hand.
+       The "إضافة كطالب" action carries them across as query parameters, and
+       /addStudent now reads them and pre-fills every box.
+
+   LOCALS
+     student  Array of { fullName, educetionlevel, grade, phoneNumber,
+                         group, cardNumber, _id }
+
+     Named `student` (singular) for an array, which is what the route has
+     always passed. `students` is accepted too so the local can be renamed on
+     the route side later without breaking this view in between.
+   ====================================================================== */
+
+var rows = [];
+if (typeof student !== "undefined" && Array.isArray(student)) {
+  rows = student;
+} else if (typeof students !== "undefined" && Array.isArray(students)) {
+  rows = students;
+}
+
+var SUBJECTS = { biology: "الأحياء", geology: "الجيولوجيا" };
+var GRADES = {
+  "1st": "الصف الأول",
+  "2nd": "الصف الثاني",
+  "3rd": "الصف الثالث"
+};
+var GROUP_LABEL = {
+  OnlineStudent: "أونلاين",
+  Saturday: "السبت",
+  Sunday: "الأحد",
+  Monday: "الاثنين",
+  Tuesday: "الثلاثاء",
+  Wednesday: "الأربعاء",
+  Thursday: "الخميس",
+  Friday: "الجمعة"
+};
+
+var ICON = {
+  online:
+    "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 4a3 3 0 1 1-3 3 3 3 0 0 1 3-3Zm0 13a7 7 0 0 1-5.3-2.4C7.5 15 9.7 14 12 14s4.5 1 5.3 2.6A7 7 0 0 1 12 19Z",
+  trash: "M8 2h8v2h5v2H3V4h5V2Zm-3 6h14l-1 14H6L5 8Zm4 2v10h2V10H9Zm4 0v10h2V10h-2Z",
+  plus: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"
+};
+
+/* Prefill /addStudent from a request. Every value is encodeURIComponent'd: an
+   Arabic full name in a query string must be percent-encoded, and a name
+   containing & would otherwise split into two parameters. */
+var signHref = function (st) {
+  var parts = [];
+  var add = function (k, v) {
+    if (v) parts.push(k + "=" + encodeURIComponent(v));
+  };
+  add("fullName", st.fullName);
+  add("cardNumber", st.cardNumber);
+  add("phoneNumber", st.phoneNumber);
+  add("educetionlevel", st.educetionlevel);
+  add("grade", st.grade);
+  add("group", st.group);
+  return "/addStudent" + (parts.length ? "?" + parts.join("&") : "");
+};
+%>
+
+<section class="panel">
+  <div class="panel__head">
+    <h2 class="panel__title">طلبات الانضمام</h2>
+    <span class="pager__count">
+      <span class="num" dir="ltr"><%= rows.length %></span> طلب
+    </span>
+  </div>
+
+  <% if (!rows.length) { %>
+  <div class="empty-state">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="<%= ICON.online %>" />
+    </svg>
+    <p class="empty-state__title">لا توجد طلبات انضمام</p>
+    <p>تظهر هنا بيانات من يرسل نموذج الانضمام من صفحة الدخول.</p>
+  </div>
+
+  <% } else { %>
+  <div class="table-scroll">
+    <table class="table">
+      <caption class="sr-only">
+        طلبات الانضمام الواردة من نموذج صفحة الدخول
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">الاسم</th>
+          <th scope="col">المادة</th>
+          <th scope="col">الصف</th>
+          <th scope="col">رقم الهاتف</th>
+          <th scope="col">المجموعة</th>
+          <th scope="col">رقم الكارت</th>
+          <th scope="col">إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (var r = 0; r < rows.length; r++) { var st = rows[r] || {}; %>
+        <tr>
+          <td class="table__name"><%= st.fullName || "—" %></td>
+
+          <td>
+            <%= st.educetionlevel ? (SUBJECTS[st.educetionlevel] || st.educetionlevel) : "—" %>
+          </td>
+
+          <td>
+            <% if (st.grade) { %>
+            <span class="tag"><%= GRADES[st.grade] || st.grade %></span>
+            <% } else { %>—<% } %>
+          </td>
+
+          <td>
+            <% if (st.phoneNumber) { %>
+            <a class="table__tel" href="tel:<%= st.phoneNumber %>" dir="ltr"><%= st.phoneNumber %></a>
+            <% } else { %>—<% } %>
+          </td>
+
+          <td>
+            <% if (st.group) { %>
+            <span class="badge"><%= GROUP_LABEL[st.group] || st.group %></span>
+            <% } else { %>—<% } %>
+          </td>
+
+          <td>
+            <% if (st.cardNumber) { %>
+            <span class="table__code" dir="ltr"><%= st.cardNumber %></span>
+            <% } else { %>—<% } %>
+          </td>
+
+          <td>
+            <div class="row-actions">
+              <a class="btn btn--ghost btn--sm" href="<%= signHref(st) %>">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="<%= ICON.plus %>" />
+                </svg>
+                إضافة كطالب
+              </a>
+
+              <form
+                method="post"
+                action="/removeStudentOnline/<%= st._id %>"
+                data-confirm="هل تريد حذف طلب «<%= st.fullName || "بدون اسم" %>»؟"
+              >
+                <% if (typeof csrfToken !== "undefined" && csrfToken) { %>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <% } %>
+                <button class="btn btn--danger btn--sm" type="submit">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="<%= ICON.trash %>" />
+                  </svg>
+                  حذف
+                </button>
+              </form>
             </div>
+          </td>
+        </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+  <% } %>
+</section>
 
-          </div>
-
-        </div>
-
-      </div>
-
-    </div>
-
-    <script src="../admin/dashboard/assets/js/main.js"></script>
-
-    <script
-
-      type="module"
-
-      src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"
-
-    ></script>
-
-    <script
-
-      nomodule
-
-      src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"
-
-    ></script>
-
-  </body>
-
-</html>
-
-
+<%- include("_foot") %>

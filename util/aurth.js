@@ -1,12 +1,16 @@
 const jwt = require("jsonwebtoken");
+const config = require("../config");
+
 const isAdmin = (req, res, nxt) => {
-  let student = jwt.verify(req.cookies.student, process.env.SecretPassword);
-  if (student) {
-    let admin = student.admin;
-    if (admin == "true") {
+  try {
+    let student = jwt.verify(req.cookies.student, config.jwtSecret);
+    if (student && student.admin == "true") {
       nxt();
-    } else return res.sendStatus(404);
-  } else {
+    } else {
+      return res.sendStatus(404);
+    }
+  } catch (err) {
+    // malformed or missing cookie — treat as not authenticated
     return res.sendStatus(404);
   }
 };

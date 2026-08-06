@@ -1,155 +1,343 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
   <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#fe3f40" />
+
+    <%
+      /* =====================================================================
+         This view has TWO renderers and they pass different shapes:
+
+           routes/units.router.js  /lessons/:educetionlevel/:grade/:month
+               { data: [Unit docs], edu, grade, month, d, degreeHome }
+
+           controllers/units.contro.js  getContent, mounted at
+           /:edu/:grade/:month/:unit
+               { data: <single unit sub-doc or "">, url }
+
+         The second passes no edu/grade/month at all, so every local is read
+         through a typeof guard. Under EJS's `with(locals)` an unguarded
+         reference to a key that was never passed is a ReferenceError, which
+         would turn that route into a 500 the moment it reached real markup.
+         Guarded, it degrades to the empty state instead.
+
+         `d` and `degreeHome` are passed by the lessons route and used by
+         neither renderer — deliberately not referenced here. */
+      var SUBJECTS = { biology: "الأحياء", geology: "الجيولوجيا" };
+      var GRADES = {
+        "1st": "الصف الأول الثانوي",
+        "2nd": "الصف الثاني الثانوي",
+        "3rd": "الصف الثالث الثانوي"
+      };
+
+      var eduRaw   = typeof edu   !== "undefined" && edu   ? String(edu)   : "";
+      var gradeRaw = typeof grade !== "undefined" && grade ? String(grade) : "";
+
+      /* isMonth gates this route on user.month.includes(req.params.month), so
+         by the time we render, month is always a value an admin created — not
+         free text from the address bar. Still escaped on output. */
+      var monthName = typeof month !== "undefined" && month ? String(month) : "";
+
+      var subjectName = SUBJECTS[eduRaw] || "";
+      var gradeName = GRADES[gradeRaw] || "";
+
+      /* Only built when both halves are in the whitelists, so the URL cannot
+         be steered by a crafted param. Falls back to the homepage. */
+      var monthsHref =
+        SUBJECTS[eduRaw] && GRADES[gradeRaw] ? "/" + eduRaw + "/" + gradeRaw : "/";
+
+      /* --------------------------------------------------------------------
+         Flatten every Unit doc's `units` array down to the rows for THIS
+         month. Same predicate the old template used
+         (month == data[i]['units'][j].month), just hoisted out of the markup.
+
+         Unit.addlesson keeps one Unit doc per (educetionlevel, grade) and
+         $pushes every month's rows into its `units` array, so `data` is
+         normally a single document and the outer loop runs once. It still
+         iterates defensively — older data may have more than one. */
+      var docs = (typeof data !== "undefined" && Array.isArray(data)) ? data : [];
+      var units = [];
+      for (var i = 0; i < docs.length; i++) {
+        var doc = docs[i];
+        var list = doc && Array.isArray(doc.units) ? doc.units : [];
+        for (var j = 0; j < list.length; j++) {
+          var u = list[j];
+          if (!u) continue;
+          if (String(u.month == null ? "" : u.month) !== monthName) continue;
+          units.push({
+            id: u._id,
+            title: u.unit,
+            /* Every segment of the link below comes from the stored document,
+               not from req.params — so no request parameter ever reaches an
+               href on this page. On the normal path they are equal anyway
+               (the route queries Unit by exactly this edu/grade), but sourcing
+               them from the record means a subject added later still links
+               correctly even though SUBJECTS above does not know its name. */
+            edu: doc.educetionlevel || eduRaw,
+            grade: doc.grade || gradeRaw,
+            month: u.month,
+            /* `lesson` holds a Google Drive FILE ID, not prose — lesson.ejs
+               embeds it as /file/d/<id>/preview. Presence means "has video". */
+            hasVideo: !!(u.lesson && String(u.lesson).trim()),
+            hasPdf: !!(u.pdf && String(u.pdf).trim()),
+            hasQuiz: !!u.quizId
+          });
+        }
+      }
+
+      /* No ordering field exists on a unit row, so insertion order IS the
+         teacher's own ordering — preserved, and numbered by position. (The
+         months page sorts instead, because month names come from a fixed
+         vocabulary; unit titles are free text and have no canonical order.) */
+    %>
+
+    <meta name="robots" content="noindex, nofollow" />
+    <meta
+      name="description"
+      content="دروس <%= monthName %> على منصة أ/ مرڤت عبدالرحمن."
+    />
+
+    <title>
+      <%= monthName ? monthName + " — " : "" %>الدروس | منصة أ/ مرڤت عبدالرحمن
+    </title>
+
     <link rel="icon" type="image/png" href="/assets/images/logo.png" />
 
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, shrink-to-fit=no"
-    />
-    <meta name="description" content="" />
-    <meta name="author" content="" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" />
+    <!-- Set before the stylesheets so .reveal elements never flash visible.
+         CSS keeps content visible unless this class is present, so a JS
+         failure leaves a readable page rather than a blank one. -->
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap"
       rel="stylesheet"
     />
 
-    <title>كوين الاحياء والچيولوچيا </title>
+    <link rel="stylesheet" href="/assets/css/tokens.css" />
+    <link rel="stylesheet" href="/assets/css/home.css" />
+    <link rel="stylesheet" href="/assets/css/listing.css" />
 
-    <!-- Bootstrap core CSS -->
-    <link href="../../../grade/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet" />
-
-    <!-- Additional CSS Files -->
-    <link rel="stylesheet" href="../../../grade/assets/css/fontawesome.css" />
-    <link rel="stylesheet" href="../../../grade/assets/css/templatemo-seo-dream.css" />
-    <link rel="stylesheet" href="../../../grade/assets/css/animated.css" />
-    <link rel="stylesheet" href="../../../grade/assets/css/owl.css" />
+    <script src="/assets/js/home.js" defer></script>
   </head>
 
   <body oncontextmenu="return false;">
-    <main>
-      <!-- ***** Preloader Start ***** -->
+    <a class="sr-only" href="#main">تخطي إلى المحتوى</a>
 
-      <!-- ***** Preloader End ***** -->
+    <div class="scroll-progress" aria-hidden="true"></div>
 
-      <!-- ***** Header Area Start ***** -->
-      <header id="header">
-        <nav>
-          <div class="container">
-            <div class="logo">
-              <a href="/">
-                <img src="/assets/images/logo.png" alt="" />
+    <header class="site-header">
+      <div class="container site-header__inner">
+        <a class="site-logo" href="/">
+          <img
+            src="/assets/images/logo.png"
+            alt="منصة أ/ مرڤت عبدالرحمن"
+            width="960"
+            height="960"
+          />
+        </a>
+
+        <button
+          class="nav-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="site-nav"
+        >
+          <span class="sr-only">القائمة</span>
+          <span class="nav-toggle__bars" aria-hidden="true"></span>
+        </button>
+
+        <nav class="site-nav" id="site-nav" aria-label="التنقل الرئيسي">
+          <ul class="site-nav__list">
+            <li><a class="site-nav__link" href="/#courses">الصفوف</a></li>
+            <li><a class="site-nav__link" href="/#activities">الاختبارات</a></li>
+            <li><a class="site-nav__link" href="/#contact">تواصل</a></li>
+            <li>
+              <a
+                class="site-nav__link site-nav__link--cta"
+                href="/logout"
+                data-magnetic
+              >
+                تسجيل الخروج
+              </a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- ======================================================= page hero -->
+      <section class="page-hero">
+        <div class="container page-hero__inner">
+          <nav class="crumbs" aria-label="مسار التصفح">
+            <ol class="crumbs__list">
+              <li><a href="/">الرئيسية</a></li>
+              <% if (subjectName) { %>
+              <li class="crumbs__sep" aria-hidden="true">/</li>
+              <li>
+                <a href="<%= monthsHref %>">
+                  <%= subjectName %><%= gradeName ? " — " + gradeName : "" %>
+                </a>
+              </li>
+              <% } %> <% if (monthName) { %>
+              <li class="crumbs__sep" aria-hidden="true">/</li>
+              <li><span aria-current="page"><%= monthName %></span></li>
+              <% } %>
+            </ol>
+          </nav>
+
+          <!-- The page had no usable h1: the old heading was an h2 reading
+               "المتاح" sitting above a level-1 heading that was always empty. -->
+          <h1 class="page-hero__title">
+            <% if (monthName) { %>دروس <em><%= monthName %></em><% } else { %>
+            <em>الدروس</em><% } %>
+          </h1>
+
+          <p class="page-hero__lede">
+            <% if (units.length) { %>
+            اختر الدرس الذي تريد مشاهدته. كل درس يحتوي على الفيديو والملفات
+            والاختبار الخاص به.
+            <% } else { %>
+            لم يتم رفع دروس هذا الشهر بعد.
+            <% } %>
+          </p>
+
+          <div class="meta-row">
+            <% if (gradeName) { %>
+            <span class="chip">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 3 1 9l11 6 9-4.91V17h2V9L12 3ZM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82Z" />
+              </svg>
+              <%= gradeName %>
+            </span>
+            <% } %> <% if (units.length) { %>
+            <span class="chip chip--primary">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M4 6h16v2H4V6Zm0 5h16v2H4v-2Zm0 5h10v2H4v-2Z" />
+              </svg>
+              <span class="num"><%= units.length %></span> درس
+            </span>
+            <% } %>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================== units -->
+      <section class="section">
+        <div class="container">
+          <% if (!units.length) { %>
+          <div class="empty">
+            <span class="empty__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M4 4h6l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 6v8h16v-8H4Z" />
+              </svg>
+            </span>
+            <h2 class="empty__title">لا توجد دروس في هذا الشهر بعد</h2>
+            <p class="empty__text">
+              يتم رفع الدروس أولًا بأول. تابع الصفحة أو تواصل مع السنتر لمعرفة
+              موعد الرفع.
+            </p>
+            <div class="empty__actions">
+              <a class="btn btn--primary" href="<%= monthsHref %>" data-magnetic>
+                العودة لقائمة الشهور
               </a>
             </div>
           </div>
-        </nav>
-      </header>
 
-      <!-- Services Start -->
-      <div class="container-fluid py-5">
-        <div class="container">
-          <div class="text-center mx-auto mb-5" style="max-width: 500px">
-            <h2
-              class="d-inline-block text-primary text-uppercase border-bottom border-5"
-            >
-              المتاح
-            </h2>
-            <h1 class="display-4"></h1>
+          <% } else { %>
+          <div class="tile-grid">
+            <% for (var k = 0; k < units.length; k++) { var t = units[k]; %>
+            <div class="card-stage reveal">
+              <a
+                class="card tile"
+                href="/content/<%= encodeURIComponent(t.edu) %>/<%= encodeURIComponent(t.grade) %>/<%= encodeURIComponent(t.month) %>/<%= encodeURIComponent(t.id) %>"
+                data-tilt
+              >
+                <span class="tile__num" aria-hidden="true">
+                  <span><%= k + 1 %></span>
+                </span>
+                <div class="card__body">
+                  <h2 class="tile__title"><%= t.title %></h2>
+
+                  <!-- Presence badges. A student could not tell what was in a
+                       unit without opening it; every card looked identical. -->
+                  <div class="tile__badges">
+                    <% if (t.hasVideo) { %>
+                    <span class="badge badge--video">
+                      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M8 5v14l11-7L8 5Z" />
+                      </svg>
+                      فيديو
+                    </span>
+                    <% } %> <% if (t.hasPdf) { %>
+                    <span class="badge">
+                      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M6 2h8l6 6v14H6V2Zm7 1.5V9h5.5L13 3.5ZM8 13h8v2H8v-2Zm0 4h8v2H8v-2Z" />
+                      </svg>
+                      ملف
+                    </span>
+                    <% } %> <% if (t.hasQuiz) { %>
+                    <span class="badge badge--quiz">
+                      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm1.6-6.7-.9.9c-.5.5-.7 1-.7 1.8h-2v-.5c0-.8.3-1.5.9-2.1l1.2-1.2c.3-.4.4-.9.3-1.3a1.8 1.8 0 0 0-3.5.5h-2A3.8 3.8 0 0 1 12 4.5a3.8 3.8 0 0 1 3.8 3.8c0 .8-.3 1.5-.9 2Z" />
+                      </svg>
+                      اختبار
+                    </span>
+                    <% } %>
+                  </div>
+
+                  <span class="card__cta">
+                    مشاهدة الدرس <span aria-hidden="true">←</span>
+                  </span>
+                </div>
+              </a>
+            </div>
+            <% } %>
           </div>
-          <div class="row g-5">
-
-         
-                  <% for(i = 0; i<data.length; i++){ %>  
-                    <% for(j=0;j<data[i].units.length;j++){ %>
-
-                     <% if(month == data[i]['units'][j].month  ){ %> 
-
-                        <div class="col-lg-4 col-md-6">
-                          <div
-                            class="service-item bg-light rounded d-flex flex-column align-items-center justify-content-center text-center"
-                          >
-                            <div
-                              class="service-item wow bounceInUp"
-                              data-wow-duration="1s"
-                              data-wow-delay="0.3s"
-                            >
-                              <h4 class="mb-3"> <%=data[i]['units'][j].unit %> </h4>
-            
-                              <div class="service-icon mb-4">
-                                <i class="fa fa-2x fa-user-md text-white"></i>
-                              </div>
-                              <a href="/content/<%=edu%>/<%=grade%>/<%=month%>/<%=data[i]['units'][j]._id%>" class="active">مشاهده</a>
-                            </div>
-                          </div>
-                        </div>
-                     
-
-          </div>
+          <% } %>
         </div>
-      </div>
-      <!-- Services End -->
+      </section>
     </main>
 
-    <footer class="footer">
+    <footer class="site-footer">
       <div class="container">
-        <div class="grid-4"></div>
-
-        <div class="bottom-footer">
-          <div class="copyright">
-            <p class="text">
-              © Copyright 2022. All Rights Reserved.
-
-              <br />Developed By:
-              <a
-                rel="nofollow"
-                href="https://www.facebook.com/profile.php?id=100011225383830"
-                >Abdelrahman</a
-              >
-              &
-              <a rel="nofollow" href="https://www.facebook.com/ahmed11mahomed">
-                Kotp</a
-              >
-            </p>
-          </div>
-
-          <div class="followme-wrap">
-            <div class="followme">
-              <h3>Follow us</h3>
-              <span class="footer-line"></span>
-              <div class="social-media">
-                <a
-                href="https://www.facebook.com/110791531658361/posts/pfbid0c69AZYrLKtQCiFQXe7t7vpaw4bi9WRtpT1SavhTNHJ1kXWonQ7bVSdpRhuVthVyTl/"
-                >
-                  <i class="fab fa-facebook-f"></i>
-                </a>
-
-                <a
-                  href="#"
-                >
-                  <i class="fa fa-youtube"></i>
-                </a>
-                <a href="whatsapp://send?text=Hello!&phone=01122839310">
-                  <i class="fa fa-whatsapp"></i>
-                </a>
-              </div>
-            </div>
-
-            <div class="back-btn-wrap">
-              <a href="#" class="back-btn">
-                <i class="fas fa-chevron-up"></i>
-              </a>
-            </div>
-          </div>
-        </div>
+        <p>
+          © <span class="num">2026</span> جميع الحقوق محفوظة — منصة أ/ مرڤت
+          عبدالرحمن.
+          <br />Developed By:
+          <a
+            rel="nofollow noopener"
+            href="https://www.facebook.com/profile.php?id=100011225383830"
+            >Abdelrahman</a
+          >
+          &amp;
+          <a rel="nofollow noopener" href="https://www.facebook.com/ahmed11mahomed"
+            >Kotb</a
+          >
+        </p>
       </div>
     </footer>
 
-    <!-- Scripts -->
+    <button class="to-top" type="button" data-to-top>
+      <span class="sr-only">العودة إلى أعلى الصفحة</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+        <path
+          d="M12 19V5m0 0-6 6m6-6 6 6"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </button>
+
     <script>
       document.onkeydown = function (e) {
-        if (event.keyCode == 123) {
+        if (e.keyCode == 123) {
           return false;
         }
         if (e.ctrlKey && e.shiftKey && e.keyCode == "I".charCodeAt(0)) {
@@ -163,16 +351,5 @@
         }
       };
     </script>
-    <script src="../../../grade/vendor/jquery/jquery.min.js"></script>
-    <script src="../../../grade/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-    <script src="../../../grade/assets/js/owl-carousel.js"></script>
-    <script src="../../../grade/assets/js/animation.js"></script>
-    <script src="../../../grade/assets/js/imagesloaded.js"></script>
-    <script src="../../../grade/assets/js/custom.js"></script>
-    <script
-      src="https://kit.fontawesome.com/f05b3a1e7e.js"
-      crossorigin="anonymous"
-    ></script>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
   </body>
 </html>
