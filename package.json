@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "description": "",
   "main": "app.js",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
-    "start": "nodemon app",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server/index.js"
   },
   "author": "",
   "license": "ISC",
@@ -37,8 +39,5 @@
     "multer": "^1.4.5-lts.1",
     "nodemon": "^3.1.10",
     "validator": "^13.7.0"
-  },
-  "engines": {
-    "node": "v16.16.0"
   }
 }
