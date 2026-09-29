@@ -348,8 +348,10 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  inline-size: 44px;
-  block-size: 44px;
+  /* Square, and --ctl-h on both axes: it is a hand target sitting in the same
+     row as .topbar__out, so a near-miss of the control height would show. */
+  inline-size: var(--ctl-h);
+  block-size: var(--ctl-h);
   flex: none;
   padding: 0;
   cursor: pointer;
@@ -384,11 +386,17 @@ a {
   margin-inline-start: auto;
 }
 
+/* Sits on the form-system control height (declared further down, in the forms
+   section) even though it lives in the chrome: it is a button in everything but
+   the tag name, and a logout control that is 2px off every other button on the
+   page is the kind of near-miss the eye reads as sloppiness without being able
+   to name it. Custom properties resolve at computed-value time, so referring to
+   --ctl-h above its :root block is fine. */
 .topbar__out {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  min-block-size: 44px;
+  min-block-size: var(--ctl-h);
   padding: var(--sp-2) var(--sp-4);
   font-size: var(--fs-sm);
   font-weight: 700;
@@ -531,12 +539,14 @@ a {
   margin: 0;
 }
 
+/* Was 40px — a third height, four pixels short of the .btn it sits beside in
+   every panel head. Same scale as everything else now. */
 .panel__link {
   margin-inline-start: auto;
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  min-block-size: 40px;
+  min-block-size: var(--ctl-h);
   padding: var(--sp-2) var(--sp-4);
   font-size: var(--fs-sm);
   font-weight: 700;
@@ -704,24 +714,102 @@ a {
   margin-block-end: var(--sp-5);
 }
 
+/* Mobile first: one control per row. A shared basis would let two 170px
+   fields sit side by side at 360px, and a half-width <select> holding
+   "كل المجموعات" truncates its own label. */
 .toolbar__field {
   display: grid;
   gap: var(--sp-1);
   min-inline-size: 0;
-  flex: 1 1 200px;
+  flex: 1 1 100%;
 }
 
 .toolbar__actions {
   display: flex;
   gap: var(--sp-2);
   flex-wrap: wrap;
+  inline-size: 100%;
+}
+
+/* Full-width buttons on a phone, so each stays an easy target instead of a
+   pill wide enough only for its two words. */
+.toolbar__actions > * {
+  flex: 1 1 auto;
+}
+
+/* The toolbar carries five controls now (search + group + subject + grade +
+   sort) where the old roster had two, so the per-field basis is narrower than
+   a two-field bar would want. The search box gets the wider one and twice the
+   grow factor — it holds a full Arabic name, not a value picked from a list. */
+@media (min-width: 768px) {
+  .toolbar__field {
+    flex: 1 1 170px;
+  }
+
+  .toolbar__field--wide {
+    flex: 2 1 240px;
+  }
+
+  .toolbar__actions {
+    inline-size: auto;
+  }
+
+  .toolbar__actions > * {
+    flex: 0 0 auto;
+  }
+}
+
+/* Once there is room, the actions sit against the inline end with the fields
+   gathered at the start, so "عرض" and "تصدير Excel" read as commands rather
+   than as a sixth field. */
+@media (min-width: 992px) {
+  .toolbar__actions {
+    margin-inline-start: auto;
+  }
 }
 
 /* ============================================================== forms ====== */
+/* -------------------------------------------------- the form-system scale ---
+
+   Names for values that were already in this file, hardcoded, and had drifted
+   apart: SIX different control heights were in use (46 / 44 / 40 / 36 / 32 /
+   28px) across controls that sit next to each other on the same row, and the
+   error red was written out four times as #a3231f plus once more as #c0392b.
+
+   These live here rather than in tokens.css deliberately. tokens.css is the
+   cross-app contract — declarations only, shared with the student-facing
+   pages — while these are the admin form system's own dimensions. Adding them
+   there would invite the marketing pages to depend on them.
+
+   --ctl-h is THE number. Anything a hand lands on — text box, dropdown,
+   button, checkbox row — is this tall, so a row of mixed controls shares one
+   top and one bottom edge. It is also the 44px minimum tap target. */
+:root {
+  --ctl-h: 44px;
+  --ctl-h-sm: 36px; /* .btn--sm, dense row actions inside a table cell */
+  --ctl-h-xs: 32px; /* icon-only buttons inside a question card       */
+
+  /* Destructive / invalid. NOT the brand red: brand red is the primary action
+     colour on these pages, and a delete button must not look like save. */
+  --c-danger: #a3231f;
+  --c-danger-dark: #851c19;
+  --c-danger-tint: #fdecea;
+}
+
+/* The field's name. Distinct from the hint below it in size, weight AND
+   colour — they used to be identical (--fs-xs / --c-muted), so a field read as
+   two hints and nothing on it looked like a name.
+
+   min-block-size is one line at this size and leading, and it is what makes a
+   .form-grid row line up: sibling fields share a top edge, so their controls
+   only align if their labels occupy the same height. */
 .label {
-  font-size: var(--fs-xs);
+  display: block;
+  min-block-size: 1.25rem;
+  font-size: var(--fs-sm);
   font-weight: 700;
-  color: var(--c-muted);
+  line-height: var(--lh-tight);
+  color: var(--c-ink);
 }
 
 /* One rule for both, so a text box and a dropdown line up on the same row.
@@ -730,12 +818,22 @@ a {
 .input,
 .select {
   inline-size: 100%;
-  min-block-size: 44px;
+  min-block-size: var(--ctl-h);
   padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-tight);
   color: var(--c-ink);
   background: var(--c-surface);
   border: 1px solid var(--c-line);
   border-radius: var(--r-sm);
+  transition: border-color var(--dur-1) var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input,
+  .select {
+    transition: none;
+  }
 }
 
 .input:focus,
@@ -743,6 +841,55 @@ a {
   border-color: var(--c-primary);
   box-shadow: var(--sh-focus);
   outline: none;
+}
+
+/* No ::placeholder rule existed at all, so every placeholder rendered at the
+   UA default — and Firefox's is opacity: 0.54 on the text colour, which lands
+   under the contrast minimum. Muted, fully opaque, and never used to carry
+   information the label should carry. */
+.input::placeholder {
+  color: var(--c-muted);
+  opacity: 1;
+}
+
+/* A file input is not a text box. It was inheriting padding sized for a
+   caret, so it rendered as an empty field with a small button loose inside
+   it. The row is the control here; the button gets the pill treatment so it
+   reads as pressable. */
+.input[type="file"] {
+  padding: var(--sp-2);
+  cursor: pointer;
+}
+
+.input[type="file"]::file-selector-button {
+  min-block-size: var(--ctl-h-xs);
+  margin-inline-end: var(--sp-3);
+  padding: 0 var(--sp-4);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--c-ink);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+}
+
+/* Textareas. `resize` was set on three unrelated component selectors, so a
+   bare <textarea class="input"> kept the UA default `resize: both` and could
+   be dragged wider than its own container — which in an RTL grid drags it out
+   past the inline-start edge. One rule, vertical only. The rows= attribute
+   stays in the markup as the no-CSS floor. */
+textarea.input {
+  min-block-size: 5.5rem;
+  padding: var(--sp-3);
+  line-height: var(--lh-body);
+  resize: vertical;
+}
+
+/* For the long-form ones: a model answer, a description. */
+textarea.input--tall {
+  min-block-size: 9rem;
 }
 
 /* A native <select> arrow sits on the physical right, which is the wrong edge
@@ -761,23 +908,80 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
+/* The hint explains the field; the label names it. One job each — so this is
+   deliberately the smaller, lighter, quieter of the two. */
 .field-hint {
   font-size: var(--fs-xs);
+  font-weight: 400;
+  line-height: 1.6;
   color: var(--c-muted);
 }
 
 /* Invalid-field affordance. Colour alone is not sufficient (WCAG 1.4.1), so
    the message text below the field is the primary signal and the border is
-   reinforcement. The literal matches .btn--danger rather than the brand red,
-   which is the primary-action colour on this page. */
+   reinforcement. Matches .btn--danger rather than the brand red, which is the
+   primary-action colour on this page.
+
+   [aria-invalid] is matched as well as the wrapper class: a server-rendered
+   error sets the wrapper, but anything setting the ARIA state on the control
+   itself must look wrong too, rather than being announced as invalid while
+   rendering as normal. */
 .form-field--error .input,
-.form-field--error .select {
-  border-color: #a3231f;
+.form-field--error .select,
+.input[aria-invalid="true"],
+.select[aria-invalid="true"] {
+  border-color: var(--c-danger);
+}
+
+.form-field--error .input:focus,
+.form-field--error .select:focus,
+.input[aria-invalid="true"]:focus,
+.select[aria-invalid="true"]:focus {
+  border-color: var(--c-danger);
 }
 
 .field-hint--error {
-  color: #a3231f;
+  color: var(--c-danger);
   font-weight: 700;
+}
+
+/* The checkbox case, which had no error treatment at all. */
+.check--error {
+  border-color: var(--c-danger);
+  background: var(--c-danger-tint);
+}
+
+/* ------------------------------------------------------- field widths ----
+
+   A three-digit mark does not need a 30rem box: a control far wider than any
+   value it can hold reads as an invitation to type a sentence into it, and the
+   user's brief names "fields are unnecessarily wide" outright.
+
+   The width is declared ON THE FIELD and applied to its control. Two
+   components used to cap `max-inline-size` on `.input` itself — 22rem on the
+   question-type select, 8rem on the grading score box — a second declaration
+   for a property `.input` already sets to `100%`, resolved by specificity, in
+   two component blocks a thousand lines apart. One vocabulary, declared once,
+   chosen at the call site.
+
+   The cap deliberately stops at the control and does not squeeze the label or
+   the hint: `.form-field--sm` on a field whose hint is a full sentence would
+   otherwise fold that sentence into an 8rem column seven lines tall. The label
+   names the field, the hint explains it, the control is the only thing whose
+   size should say something about the value — each element doing one job. */
+.form-field--sm > .input,
+.form-field--sm > .select {
+  max-inline-size: 8rem; /* a mark out of 100, a duration */
+}
+
+.form-field--md > .input,
+.form-field--md > .select {
+  max-inline-size: 14rem; /* a date, a card number */
+}
+
+.form-field--lg > .input,
+.form-field--lg > .select {
+  max-inline-size: 22rem; /* the question-type select */
 }
 
 /* ------------------------------------------------------------- buttons --- */
@@ -786,10 +990,11 @@ a {
   align-items: center;
   justify-content: center;
   gap: var(--sp-2);
-  min-block-size: 44px;
+  min-block-size: var(--ctl-h);
   padding: var(--sp-2) var(--sp-5);
   font-size: var(--fs-sm);
   font-weight: 700;
+  line-height: var(--lh-tight);
   color: #fff;
   background: var(--c-primary);
   border: 1px solid transparent;
@@ -797,6 +1002,24 @@ a {
   cursor: pointer;
   transition: background-color var(--dur-1) var(--ease),
     transform var(--dur-1) var(--ease);
+}
+
+/* The base .btn IS the primary action — there is no unstyled default to
+   promote. `.btn--primary` exists because the markup reaches for it (the
+   grading save button did, and rendered as a bare inline button because the
+   class was never defined here). Kept as an explicit alias rather than
+   stripped from the views: the name is the one everybody guesses, and a class
+   that silently does nothing is worse than one that does the obvious thing. */
+.btn--primary {
+  color: #fff;
+  background: var(--c-primary);
+  border-color: transparent;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn--primary:hover {
+    background: var(--c-primary-dark);
+  }
 }
 
 .btn svg {
@@ -832,19 +1055,26 @@ a {
    The old page used `background-color: brown` inline. */
 .btn--danger {
   color: #fff;
-  background: #a3231f;
+  background: var(--c-danger);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .btn--danger:hover {
-    background: #851c19;
+    background: var(--c-danger-dark);
   }
 }
 
 .btn--sm {
-  min-block-size: 36px;
-  padding: var(--sp-1) var(--sp-3);
+  min-block-size: var(--ctl-h-sm);
+  padding: var(--sp-1) var(--sp-4);
   font-size: var(--fs-xs);
+}
+
+/* Row actions inside a table cell put two of these side by side, so their
+   icons need to shrink with them or the button grows back to full height. */
+.btn--sm svg {
+  inline-size: 16px;
+  block-size: 16px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -881,7 +1111,7 @@ a {
 /* The required marker. `abbr[title]` gets a dotted underline by default in
    several browsers, which reads as a spelling error next to a label. */
 .label abbr {
-  color: #a3231f;
+  color: var(--c-danger);
   text-decoration: none;
   border: 0;
   margin-inline-start: 0.25rem;
@@ -891,38 +1121,54 @@ a {
    pairs — no labels, no grouping, and the spacing was unadjustable. */
 .form-grid {
   display: grid;
-  gap: var(--sp-4);
+  gap: var(--sp-4) var(--sp-5);
   grid-template-columns: 1fr;
+  align-items: start;
 }
 
 @media (min-width: 768px) {
   .form-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-
-  .form-grid > .form-grid__full {
-    grid-column: 1 / -1;
-  }
 }
 
+/* Outside the media query on purpose. It used to be declared only above
+   768px, where it happens to be needed — but below that the grid is
+   single-column and `grid-column: 1 / -1` is a no-op, so the rule can just
+   say what it means at every width instead of being width-conditional for a
+   reason nobody reading it would guess. */
+.form-grid > .form-grid__full {
+  grid-column: 1 / -1;
+}
+
+/* `align-content: start` keeps the control pinned under its label when a
+   sibling field in the same row is taller (one with a two-line hint), instead
+   of the shorter field's control drifting down to centre itself. */
 .form-field {
   display: grid;
-  gap: var(--sp-1);
+  gap: var(--sp-2);
+  align-content: start;
   min-inline-size: 0;
 }
 
 .form-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--sp-3);
-  margin-block-start: var(--sp-5);
+  margin-block-start: var(--sp-6);
   padding-block-start: var(--sp-5);
   border-block-start: 1px solid var(--c-line);
 }
 
+/* A form-level section. The spacing lives here rather than on a style=
+   attribute at the call site — editStudent.ejs used to carry
+   `style="margin-block-start: var(--sp-5)"` on one of these, which is the
+   sort of thing that then has to be repeated by hand on every new page. */
 .fieldset {
   min-inline-size: 0;
   margin: 0;
+  margin-block-start: var(--sp-5);
   padding: var(--sp-4);
   border: 1px solid var(--c-line);
   border-radius: var(--r-md);
@@ -956,19 +1202,27 @@ a {
   }
 }
 
+/* A checkbox row is a control, so it is --ctl-h tall like every other one.
+   `padding-block` rather than a fixed height: a label that wraps to two lines
+   grows the row instead of overflowing it, and min-block-size still holds the
+   floor for the short ones so a column of them is even. */
 .check {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
-  min-block-size: 44px;
-  padding-inline: var(--sp-3);
+  gap: var(--sp-3);
+  min-block-size: var(--ctl-h);
+  padding: var(--sp-2) var(--sp-3);
   font-size: var(--fs-sm);
+  line-height: var(--lh-tight);
   background: var(--c-surface-alt);
   border: 1px solid var(--c-line);
   border-radius: var(--r-sm);
   cursor: pointer;
 }
 
+/* `flex: none` is what stops the box being squashed into an oval by a long
+   label — a flex item's default `min-inline-size: auto` does not protect a
+   replaced element here. */
 .check input {
   inline-size: 18px;
   block-size: 18px;
@@ -981,6 +1235,14 @@ a {
   font-weight: 700;
   border-color: var(--c-primary);
   background: var(--c-primary-tint);
+}
+
+/* The native ring sits on the 18px box and is easy to lose against the tinted
+   row, so the whole row answers for it. :focus-visible only, so a mouse click
+   does not leave the row looking selected. */
+.check:has(input:focus-visible) {
+  border-color: var(--c-primary);
+  box-shadow: var(--sh-focus);
 }
 
 /* ============================================================== flash ====== */
@@ -1045,6 +1307,68 @@ a {
 .badge--admin {
   color: var(--c-primary);
   background: var(--c-primary-tint);
+  border-color: currentColor;
+}
+
+/* ------------------------------------------------------- marking status ----
+   WHERE A SUBMISSION STANDS. Four states, one per value of util/grading's
+   STATUS: none (nothing to mark by hand), pending, partial, graded.
+
+   These replace the single .badge--review that came before them, which said
+   only "this attempt has an essay somewhere" and — being painted from the
+   stored needsReview flag, written once at submit time and never cleared —
+   went on saying it after the paper had been marked. The status is now derived
+   on every render, so it needs a vocabulary that can say "partly" and "done"
+   as well as "waiting". Nothing renders .badge--review any more; it is gone
+   rather than left behind as dead CSS with a misleading name.
+
+   `none` deliberately has no modifier: an all-multiple-choice paper needs no
+   colour drawing the eye to a status that will never change.
+
+   Every colour here is paired with its own Arabic label in the markup, so the
+   state survives greyscale and colour blindness (WCAG 1.4.1). Each clears
+   4.5:1 on its own tint.
+
+   margin-block-start rather than an inline gap: in the mark cell the score
+   pill and the pending count both wrap, and stacking them keeps that column
+   narrow enough to leave room for the actions. */
+.badge--pending {
+  display: inline-block;
+  margin-block-start: var(--sp-1);
+  color: #8a5a00;
+  background: #fff6e5;
+  border-color: currentColor;
+}
+
+.badge--partial {
+  display: inline-block;
+  margin-block-start: var(--sp-1);
+  color: #1d4ed8;
+  background: #eaf0ff;
+  border-color: currentColor;
+}
+
+.badge--graded {
+  display: inline-block;
+  margin-block-start: var(--sp-1);
+  color: #1c7c4a;
+  background: #e9f7ef;
+  border-color: currentColor;
+}
+
+/* HANDED IN AFTER THE DEADLINE. Not one of the four marking statuses above —
+   it says something about the submission, not about how far the marking has
+   got, so an attempt can be both late and fully graded and wears both badges.
+
+   Uses the form system's --c-danger rather than a fifth colour, because unlike
+   "pending" this is not a state that resolves on its own: the answers arrived
+   after the time was up and always will have. The word متأخر carries it in
+   greyscale, and the exact lateness is on the detail page. */
+.badge--late {
+  display: inline-block;
+  margin-block-start: var(--sp-1);
+  color: var(--c-danger);
+  background: #fdecec;
   border-color: currentColor;
 }
 
@@ -1180,7 +1504,7 @@ a {
   display: none;
   align-items: center;
   gap: 6px;
-  min-block-size: 32px;
+  min-block-size: var(--ctl-h-xs);
   padding-inline: var(--sp-2);
   border: 1px solid var(--c-line);
   border-radius: var(--r-sm);
@@ -1203,8 +1527,8 @@ a {
 
 .qcard__remove:hover,
 .qcard__remove:focus-visible {
-  border-color: #a3231f;
-  color: #a3231f;
+  border-color: var(--c-danger);
+  color: var(--c-danger);
 }
 
 /* One question left: removing it would leave a form that cannot be submitted,
@@ -1215,12 +1539,47 @@ a {
   cursor: not-allowed;
 }
 
-.qcard__question {
-  resize: vertical;
-}
+/* No .qcard__question rule: `resize: vertical` used to be restated here and on
+   .qcard__model textarea below. Both textareas carry class="input", so
+   textarea.input already owns it — a second copy is only a second place to
+   change it. Same consolidation as the note on .gq__mark-feedback further down. */
 
 .qcard__image {
   margin-block-start: var(--sp-4);
+}
+
+/* ---------------------------------------------------------- question type -- */
+.qcard__type {
+  margin-block-end: var(--sp-4);
+}
+
+/* The width cap that used to live here as `.qcard__type .input { max-inline-size:
+   22rem }` is gone. It set a width on the control, directly contradicting the
+   `inline-size: 100%` in .input's own rule two hundred lines above — two
+   declarations for one property, resolved by specificity rather than by intent,
+   which is exactly the trap the design skill warns about. Width is now a
+   property of the FIELD: the markup wears .form-field--lg and .input keeps its
+   single, unopposed sizing rule. */
+
+/* Each type's hint is rendered and all but one carries the `hidden`
+   attribute, so the select still explains itself with JavaScript off. UA
+   stylesheets already apply display:none to [hidden], but .field-hint may
+   set its own display — this makes sure hidden wins either way. */
+.field-hint[hidden],
+.qfields[hidden] {
+  display: none !important;
+}
+
+/* The three per-type groups are <fieldset>s so that `disabled` cascades to
+   every control inside — see the trap documented at the top of
+   views/admin/_question-block.ejs. A fieldset carries a browser default
+   border, margin and padding that would draw a box around each group inside
+   the card; stripped, because the card is already the visual container. */
+.qfields {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
 }
 
 /* --------------------------------------------------------------- choices -- */
@@ -1235,11 +1594,14 @@ a {
 }
 
 /* Radio in column 1 spanning both rows; label above its own text box in
-   column 2. Grid rather than flex so the four rows align on the radio
-   regardless of how long a choice label wraps. */
+   column 2. Grid rather than flex so the rows align on the radio regardless
+   of how long a choice label wraps.
+
+   Four columns now, not three: the option count is variable (2–6), so each
+   row carries its own remove button in the last column. */
 .qchoice {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr auto auto;
   column-gap: var(--sp-3);
   row-gap: 4px;
   align-items: center;
@@ -1302,6 +1664,79 @@ a {
   visibility: visible;
 }
 
+/* ------------------------------------------------- add / remove an option --
+   Three of the custom properties this rule used to name DID NOT EXIST:
+   --c-border (the token is --c-line), --fs-md (the scale goes xs/sm then
+   straight to the heading sizes) and --c-danger, which was written with a
+   #c0392b fallback — a fourth red, one the palette has never contained. An
+   undefined var() with no fallback makes the declaration invalid at computed-
+   value time, so this button was rendering with a 3px default border, an
+   inherited font size, and its hover state falling back to an off-brand red.
+   All three now resolve, and the size joins the icon-button scale (28 → 32px,
+   the same as .qcard__remove above it). */
+.qchoice__remove {
+  grid-column: 4;
+  grid-row: 1 / span 2;
+  display: inline-grid;
+  place-items: center;
+  inline-size: var(--ctl-h-xs);
+  block-size: var(--ctl-h-xs);
+  padding: 0;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-muted);
+  font-size: var(--fs-sm);
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qchoice__remove {
+    transition: none;
+  }
+}
+
+.qchoice__remove:hover,
+.qchoice__remove:focus-visible {
+  border-color: var(--c-danger);
+  background: var(--c-danger-tint);
+  color: var(--c-danger);
+}
+
+/* Disabled at MIN_OPTIONS by admin.js. Kept in the layout rather than hidden
+   so the rows do not shift sideways as the button comes and goes. */
+.qchoice__remove[disabled] {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.qchoices__add {
+  margin-block-start: var(--sp-3);
+}
+
+/* True/false has no text box and no flag, so its label is the option itself
+   rather than a caption above one — it belongs beside the radio, at full
+   size, and spanning the columns the missing controls would have used. */
+.qchoice__label--tf {
+  grid-column: 2 / -1;
+  grid-row: 1 / span 2;
+  font-size: inherit;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* The Explain model answer. Its own margin because it is the only thing in
+   its group, so it has no sibling to space it from. */
+.qcard__model {
+  margin-block-start: var(--sp-4);
+}
+
+/* Its textarea's `resize: vertical` lives on textarea.input, not here. */
+
 /* A count on the submit button, so the admin can confirm how many questions
    are about to be saved without scrolling back up. */
 .btn__badge {
@@ -1344,7 +1779,9 @@ a {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  min-block-size: 44px;
+  /* A hand target, so it is --ctl-h like every other one — this was the last
+     literal 44px left in the file after step 1a named the value. */
+  min-block-size: var(--ctl-h);
   color: var(--c-muted);
   font-weight: 700;
 }
@@ -1353,6 +1790,97 @@ a {
   .crumbs a:hover {
     color: var(--c-primary);
   }
+}
+
+/* ==================================================== split nav (2 tabs) ==== */
+/* The two halves of one paper: its own fields, and its questions. They used to
+   be one page — the edit form rendered the question builder underneath itself,
+   so an admin who wanted to fix a typo in the title was handed a form that
+   could also rewrite every question. Now they are two URLs, and this bar is
+   what says so and what gets you between them.
+
+   Deliberately NOT tabs in the ARIA sense. There is no tabpanel and no JS: each
+   item is a real link to a real page, and the current one is a <span> so it is
+   not a link to where you already are. Arrow-key tab semantics would be a lie
+   about markup that is a nav. */
+.split-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-block-end: var(--sp-5);
+  padding: var(--sp-1);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  /* The form card below is capped at the same width, so a full-bleed bar over a
+     narrow card would read as belonging to the page, not to the card. */
+  max-inline-size: 720px;
+}
+
+.split-nav__item {
+  /* flex: 1 1 0 with a min of 0 — two halves of equal width that both collapse
+     to their own line on a narrow phone instead of squeezing the labels. */
+  flex: 1 1 0;
+  min-inline-size: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-block-size: var(--ctl-h);
+  padding-inline: var(--sp-3);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--c-muted);
+  background: transparent;
+  border-radius: var(--r-sm);
+  text-align: center;
+  transition: color var(--dur-1) var(--ease),
+    background-color var(--dur-1) var(--ease);
+}
+
+.split-nav__item svg {
+  flex: 0 0 auto;
+  inline-size: 18px;
+  block-size: 18px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  a.split-nav__item:hover {
+    color: var(--c-primary);
+    background: var(--c-surface);
+  }
+}
+
+/* The page you are on. Raised out of the trough rather than tinted, so which
+   half is current survives greyscale — the shadow and the surface change, not
+   just the colour. */
+.split-nav__item.is-current {
+  color: var(--c-ink);
+  background: var(--c-surface);
+  box-shadow: var(--sh-1);
+  cursor: default;
+}
+
+/* The question count, on the questions half. Latin digits inside an Arabic
+   label, so it carries its own isolation like every other .num run. */
+.split-nav__count {
+  flex: 0 0 auto;
+  min-inline-size: 1.75rem;
+  padding: 2px var(--sp-2);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  color: var(--c-muted);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-pill);
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.split-nav__item.is-current .split-nav__count {
+  color: #fff;
+  background: var(--c-primary);
+  border-color: var(--c-primary);
 }
 
 /* ============================================== existing questions list ==== */
@@ -1426,6 +1954,46 @@ a {
   margin-inline-start: auto;
 }
 
+/* The question type, as a badge on the row. Sits before .qlist__del in the
+   markup and therefore before the `margin-inline-start: auto` that pushes the
+   delete button away, so it stays next to the question text. */
+.qlist__type {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 2px var(--sp-2);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--c-muted);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+}
+
+/* The model answer on an essay question, in place of the choice list. */
+.qlist__model {
+  margin-block-start: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+  overflow-wrap: anywhere;
+}
+
+.qlist__model-label {
+  font-weight: 700;
+  color: var(--c-muted);
+}
+
+/* No model answer was written. Stated rather than left blank, so an empty
+   space is never mistaken for options that failed to save. */
+.qlist__model--none {
+  color: var(--c-muted);
+  font-style: italic;
+}
+
 .qlist__has-image {
   margin-block-start: var(--sp-3);
   font-size: var(--fs-xs);
@@ -1477,6 +2045,84 @@ a {
   border-radius: var(--r-pill);
 }
 
+/* The per-question action row: move up, move down, edit, delete. Four separate
+   one-button forms (a nested form would be dropped by the parser), so they need
+   `display: contents` for the same reason .row-actions does — a <form> wrapper
+   would otherwise become a flex item and take the gap twice.
+
+   Ruled off from the question above it: these buttons act on the question, and
+   without a divider the delete sits close enough to the choice list to read as
+   deleting a choice. */
+.qlist__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-block-start: var(--sp-4);
+  padding-block-start: var(--sp-3);
+  border-block-start: 1px solid var(--c-line);
+}
+
+/* `:not(.qlist__del)` matters: .qlist__del carries `margin-inline-start: auto`
+   to push delete to the far edge of the row, away from the three safe actions,
+   and `display: contents` would erase the box that margin lives on. The move
+   forms have no such margin, so they collapse. */
+.qlist__actions form:not(.qlist__del) {
+  margin: 0;
+  display: contents;
+}
+
+/* Reorder. Icon-only, so the accessible name is the .sr-only text inside — it
+   names the position too ("نقل السؤال 3 إلى أعلى"), because "up" alone in a
+   list of twenty buttons tells a screen-reader user nothing.
+
+   :disabled rather than hidden at the ends of the list: a button that vanishes
+   on the first and last rows makes every other row's pair of buttons land in a
+   different place. */
+.qmove {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--ctl-h-xs);
+  block-size: var(--ctl-h-xs);
+  padding: 0;
+  color: var(--c-muted);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
+}
+
+.qmove svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .qmove:not(:disabled):hover {
+    color: var(--c-primary);
+    border-color: var(--c-primary);
+  }
+}
+
+.qmove:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* The question currently open in the edit form above. border-inline-start, so
+   the marker is on the reading edge — the right in RTL. The form also names the
+   question number in its heading, so this is reinforcement, not the only way to
+   tell which row is being edited. */
+.qlist__item.is-editing {
+  border-color: var(--c-accent);
+  border-inline-start-width: 3px;
+  background: var(--c-accent-tint);
+}
+
 @media (min-width: 768px) {
   .qlist {
     gap: var(--sp-5);
@@ -1489,6 +2135,293 @@ a {
   }
 }
 
+/* ============================================================== score ====== */
+/* The mark cell on the degrees tables (showStudDegree.ejs).
+
+   Colour is never the only signal: the raw fraction and the percentage are
+   both printed inside the pill, so a greyscale print, a colour-blind reader
+   and a low-contrast screen all get the same information the green/red does.
+   Same rule as .qlist__flag above.
+
+   The two colours are local to this component rather than tokens, because
+   nothing else in the admin has a pass/fail axis yet; promote them to
+   tokens.css the moment a second component needs them. Both clear 4.5:1 on
+   their own tint. */
+.score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--c-muted);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+  /* A mark is two Latin digit runs around a slash. Without isolation the
+     bidi algorithm can reorder them inside an RTL row, so 3/10 reads 10/3. */
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.score--pass {
+  color: #1c7c4a;
+  background: #e9f7ef;
+  border-color: #b7e2c9;
+}
+
+.score--fail {
+  color: #b3261e;
+  background: #fdecea;
+  border-color: #f3c2bd;
+}
+
+.score__pct {
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+/* .stats is sized for the five dashboard tiles and goes to five columns at
+   1200px. The degrees pages show three, which would leave two empty tracks
+   and shrink the tiles for no reason.
+
+   Straight from one column to three: at two columns a set of three leaves an
+   orphan on its own row, and 768px is the first width where a 48px icon plus
+   a value and an Arabic label fit in a third of the content column. */
+.stats--3 {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .stats--3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* =========================================================== grading ======= */
+/* THE REVIEW PAGE (gradingDetail.ejs) — one submission, one card per question,
+   and the inputs a teacher marks the essays with.
+
+   Built on the existing question-list vocabulary rather than beside it: the
+   card, the number, the question text, the type chip, the choice list, the
+   model answer and the .score pill are all .qlist__* / .score classes reused
+   verbatim, and everything below is only what marking adds. Two parallel
+   question-card systems is exactly how the three assessment types drifted
+   apart before they were merged. */
+
+/* The header facts — student, group, type, dates. A <dl>, because that is what
+   this is; the grid gives it a label column that stays aligned down the list
+   instead of each row finding its own indent. */
+.gmeta {
+  display: grid;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: var(--sp-5);
+}
+
+.gmeta__row {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.gmeta__row dt {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--c-muted);
+}
+
+.gmeta__row dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  overflow-wrap: anywhere;
+}
+
+/* A sentence explaining a value rather than another value. flex-basis: 100% so
+   it takes its own line inside the flex dd instead of sitting beside the number
+   it is explaining. */
+.gmeta__note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--c-muted);
+  line-height: 1.6;
+}
+
+@media (min-width: 768px) {
+  /* Label beside value once there is room. `max-content` rather than a fixed
+     width so the column fits the longest Arabic label and no more. */
+  .gmeta__row {
+    grid-template-columns: minmax(0, max-content) 1fr;
+    gap: var(--sp-4);
+    align-items: baseline;
+  }
+}
+
+/* The marking form wraps the whole question list, so one submit records the
+   whole paper and the status is recomputed once. Nothing here needs layout of
+   its own — it exists to be a form. */
+.gq-form {
+  display: contents;
+}
+
+.gq {
+  display: grid;
+  gap: var(--sp-4);
+  margin: 0;
+  padding: var(--sp-5);
+  list-style: none;
+  /* An <ol> whose numbers are already drawn by .qlist__no. The counter would
+     print a second, differently-styled number beside it — and in RTL on the
+     wrong side of the card. */
+  counter-reset: none;
+}
+
+.gq__item {
+  padding: var(--sp-4);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+}
+
+/* The cards that need a human. The accent bar on the reading edge (the RIGHT
+   in RTL — border-left would put it on the wrong side) is what lets a teacher
+   scroll a twenty-question paper and see where the work is. */
+.gq__item--manual {
+  background: var(--c-surface);
+  border-inline-start: 3px solid var(--c-accent);
+}
+
+.gq__image {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+  margin-block-start: var(--sp-3);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+}
+
+/* The option the student actually picked, on top of .is-correct's key marking.
+   A question answered correctly carries both, so the two must be legible
+   together: the key keeps its accent tint and this adds a dashed outline,
+   rather than a second background colour that would simply overwrite it. */
+.qlist__choices .is-picked {
+  outline: 2px dashed var(--c-muted);
+  outline-offset: 2px;
+}
+
+.gq__pick {
+  color: var(--c-muted);
+  border-color: var(--c-muted);
+}
+
+.gq__verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-block-start: var(--sp-3);
+}
+
+.gq__answer {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+.gq__answer-label {
+  font-weight: 700;
+  color: var(--c-muted);
+}
+
+.gq__answer-text {
+  font-weight: 700;
+}
+
+/* Nothing was answered / nothing was written. Muted and italic, never blank:
+   an empty space reads as a rendering fault, and on the essay cards it would
+   read as a lost answer. */
+.gq__answer-text--none {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--c-muted);
+}
+
+/* Handed in before per-question answers were stored. An explicit note, because
+   the alternative — an empty answer line — asserts something false about what
+   the student did. */
+.gq__unknown {
+  margin: 0;
+  padding: var(--sp-3);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  color: #8a5a00;
+  background: #fff6e5;
+  border: 1px solid currentColor;
+  border-radius: var(--r-sm);
+}
+
+.gq__written {
+  margin-block-start: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+}
+
+.gq__item--manual .gq__written {
+  background: var(--c-canvas);
+}
+
+/* pre-wrap so the paragraphs the student typed survive into the marking view —
+   a wall of run-together text is harder to mark fairly. overflow-wrap for a
+   pasted URL or formula long enough to widen the card. */
+.gq__written-text {
+  margin: var(--sp-1) 0 0;
+  line-height: var(--lh-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The score box and the feedback box. Stacked on a phone, side by side once
+   there is room, with the score column sized to the input rather than to half
+   the card — a three-character number field stretched to 50% invites typing a
+   sentence into it. */
+.gq__mark {
+  display: grid;
+  gap: var(--sp-3);
+  margin-block-start: var(--sp-4);
+}
+
+@media (min-width: 768px) {
+  .gq__mark {
+    /* `auto`, not a repeated `8rem`. The score column is as wide as the score
+       field says it is — .form-field--sm in the markup — so the width is
+       stated once instead of here and again on the input, where the two could
+       drift apart. */
+    grid-template-columns: auto 1fr;
+    align-items: start;
+  }
+}
+
+/* .gq__mark-feedback's textarea used to restate `min-block-size: 5.5rem;
+   resize: vertical` — both are now on textarea.input for every textarea in the
+   dashboard, so the bespoke copy is gone. */
+
+/* Printing a submission is how these get filed. The marking inputs print as
+   the values they hold, and the empty ones print as an empty box a teacher can
+   write in — so the sheet is usable either way. */
+@media print {
+  .gq__item {
+    break-inside: avoid;
+  }
+}
 
 /* Admins print these tables. Without this the fixed sidebar prints on page 1
    and the table is clipped to the grid column. */
@@ -1502,6 +2435,8 @@ a {
   .pager__nav,
   .form-actions,
   .crumbs,
+  .split-nav,
+  .qlist__actions,
   .qlist__del {
     display: none !important;
   }

@@ -1,0 +1,579 @@
+<%- include("_head", { active: "grading", title: "تصحيح تسليم" }) %>
+<%
+/* =========================================================================
+   ONE SUBMISSION, QUESTION BY QUESTION — the screen the whole feature exists
+   for. Auto-graded questions are read-only evidence; every Explain question
+   gets a mark box and a feedback box, and all of them post together.
+
+   ONE FORM FOR THE WHOLE PAPER, not one per question. A paper is marked in a
+   single pass and the status is recomputed once, so a teacher cannot leave the
+   page in a state where three questions saved and the fourth did not. It also
+   means the browser's own number validation covers every box before anything
+   is sent.
+
+   FIELD NAMING is flat and index-based — score_3, feedback_3 — for the same
+   reason the question builder uses q_0_a1: app.js parses bodies with
+   express.urlencoded({ extended: false }), which is the querystring module and
+   does no bracket nesting whatsoever. `score_<index>` keys off the question's
+   position in the PAPER, which is what util/grading.applyMarks reads back.
+
+   LOCALS
+     attempt   Object  the degreeQuiz document (.lean())
+     paper     Object  the populated quiz/homework/exam document
+     pupil     Object  the populated student document
+     kind      String  the queue's type facet, carried through for the back link
+     status    String  the queue's status facet, ditto
+     KIND_LABEL Object type -> Arabic label
+     flashOk   String  a message from the previous save              (optional)
+     flashBad  String  a validation refusal from the previous save   (optional)
+     csrfToken String
+     f, qs, GROUP_LABEL, GRADE_LABEL — util/tableFilters.viewLocals()
+     GSTATUS, GSTATUS_LABELS, FEEDBACK_MAX, totalsOf, reviewRows,
+     statusOf — util/grading.viewLocals()
+     QTYPE_LABELS — util/questionTypes.viewLocals()
+
+   Read behind `typeof` guards throughout: EJS compiles with `with(locals)`, so
+   naming a key the caller did not pass throws ReferenceError, and a render
+   error bypasses the route's try/catch because Express hands it to its own
+   error handler.
+   ====================================================================== */
+
+var A = typeof attempt !== "undefined" && attempt ? attempt : {};
+var P = typeof paper !== "undefined" && paper ? paper : {};
+var S = typeof pupil !== "undefined" && pupil ? pupil : {};
+var token = typeof csrfToken !== "undefined" && csrfToken ? csrfToken : "";
+
+var okMsg = typeof flashOk !== "undefined" && flashOk ? String(flashOk) : "";
+var badMsg = typeof flashBad !== "undefined" && flashBad ? String(flashBad) : "";
+
+var FS =
+  typeof f !== "undefined" && f && typeof f === "object"
+    ? f
+    : { group: "", grade: "", level: "", sort: "", q: "", active: false, touched: false };
+
+var GROUP_MAP = typeof GROUP_LABEL !== "undefined" && GROUP_LABEL ? GROUP_LABEL : {};
+var GRADE_MAP = typeof GRADE_LABEL !== "undefined" && GRADE_LABEL ? GRADE_LABEL : {};
+
+var KIND = typeof kind !== "undefined" && kind ? String(kind) : "";
+var STAT = typeof status !== "undefined" && status ? String(status) : "";
+var KMAP =
+  typeof KIND_LABEL !== "undefined" && KIND_LABEL
+    ? KIND_LABEL
+    : { quiz: "كويز", homework: "واجب", exam: "امتحان" };
+
+var ST =
+  typeof GSTATUS !== "undefined" && GSTATUS
+    ? GSTATUS
+    : { NONE: "none", PENDING: "pending", PARTIAL: "partial", GRADED: "graded" };
+var ST_LABEL =
+  typeof GSTATUS_LABELS !== "undefined" && GSTATUS_LABELS
+    ? GSTATUS_LABELS
+    : { none: "لا يحتاج تصحيحًا", pending: "بانتظار التصحيح", partial: "تصحيح جزئي", graded: "تم التصحيح" };
+
+var TLABEL =
+  typeof QTYPE_LABELS !== "undefined" && QTYPE_LABELS
+    ? QTYPE_LABELS
+    : { mcq: "اختيار من متعدد", truefalse: "صح أو خطأ", explain: "مقالي" };
+
+var FBMAX = typeof FEEDBACK_MAX !== "undefined" && FEEDBACK_MAX ? Number(FEEDBACK_MAX) : 2000;
+
+/* The two helpers this page genuinely cannot inline — the question/answer join
+   and the arithmetic. Their fallbacks render an honest empty page rather than a
+   half-computed one: with no reviewRows there are no questions to show, and
+   with no totalsOf there are no marks to report. A caller that forgets
+   gr.viewLocals() gets a page that says nothing instead of a page that says
+   something wrong. */
+var ROWS = typeof reviewRows === "function" ? reviewRows(P, A) || [] : [];
+var T =
+  typeof totalsOf === "function"
+    ? totalsOf(P, A)
+    : {
+        auto: null, autoOutOf: 0, manual: 0, manualOutOf: 0,
+        final: null, finalOutOf: 0, pct: null, essays: 0, pending: 0,
+        submitted: false, status: ST.NONE
+      };
+
+/* Same server-stable formatting as the queue: no Intl, no locale month names,
+   so the string does not depend on the host's ICU build. */
+function stamp(d) {
+  if (!d) return "";
+  var t = d instanceof Date ? d : new Date(d);
+  if (isNaN(t.getTime())) return "";
+  var p = function (n) { return (n < 10 ? "0" : "") + n; };
+  return (
+    t.getFullYear() + "-" + p(t.getMonth() + 1) + "-" + p(t.getDate()) +
+    " " + p(t.getHours()) + ":" + p(t.getMinutes())
+  );
+}
+
+var when = A.submittedAt ? stamp(A.submittedAt) : "";
+var started = "";
+if (!when && A._id) {
+  try {
+    started = typeof A._id.getTimestamp === "function" ? stamp(A._id.getTimestamp()) : "";
+  } catch (e) {
+    started = "";
+  }
+}
+var markedAt = A.gradedAt ? stamp(A.gradedAt) : "";
+var markedBy = A.gradedBy ? String(A.gradedBy) : "";
+
+/* HANDED IN AFTER THE DEADLINE. Stamped by util/attemptTime.js when the answers
+   arrived more than its grace window past this attempt's own deadline. The
+   submission was still recorded and graded — refusing it would have awarded
+   zero and destroyed the only copy of the work — and it was forced into the
+   marking queue instead, which is why this attempt may be here at all.
+
+   Absent on attempts submitted before the flag existed, which reads as "not
+   known to be late" rather than "on time", so nothing shows unless it is set.
+   Both minutes and the exact seconds are given: the minutes are what a teacher
+   judges by, the seconds are the evidence. */
+var wasLate = A.late === true;
+var lateSecs = wasLate && A.lateBy != null ? Math.max(0, Math.floor(Number(A.lateBy))) : 0;
+if (!isFinite(lateSecs)) lateSecs = 0;
+var lateMins = lateSecs ? Math.max(1, Math.round(lateSecs / 60)) : 0;
+
+var kindOf = A.type || P.type || "";
+var essayRows = ROWS.filter(function (r) { return !r.auto; });
+/* The back link, rebuilt from the same pieces the route uses, so returning
+   from here lands on the exact list the admin came from. */
+var QS = typeof qs === "function" ? qs : function () { return ""; };
+function queueHref() {
+  var base = QS(FS, null);
+  var bits = [];
+  if (KIND) bits.push("type=" + encodeURIComponent(KIND));
+  if (STAT) bits.push("status=" + encodeURIComponent(STAT));
+  if (!bits.length) return "/grading" + base;
+  return "/grading" + (base ? base + "&" + bits.join("&") : "?" + bits.join("&"));
+}
+
+var ICON = {
+  ok: "M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z",
+  bad: "M12 2 1 21h22L12 2Zm0 6 6.5 11h-13L12 8Zm-1 3v4h2v-4h-2Zm0 5v2h2v-2h-2Z",
+  chart: "M3 21V3h2v16h16v2H3Zm4-4V10h3v7H7Zm5 0V6h3v11h-3Zm5 0v-5h3v5h-3Z",
+  pen: "m3 17.2 9.9-9.9 3.8 3.8L6.8 21H3v-3.8ZM17.7 9.7 13.9 5.9l1.8-1.8a1 1 0 0 1 1.4 0l2.4 2.4a1 1 0 0 1 0 1.4l-1.8 1.8Z",
+  sum: "M6 4h12v2.5l-5.2 5.5 5.2 5.5V20H6v-2h8.4l-4.6-4.9v-1.2L14.4 6H6V4Z"
+};
+
+var BADGE = {};
+BADGE[ST.NONE] = "";
+BADGE[ST.PENDING] = " badge--pending";
+BADGE[ST.PARTIAL] = " badge--partial";
+BADGE[ST.GRADED] = " badge--graded";
+%>
+
+<nav class="crumbs" aria-label="مسار التنقل">
+  <a href="<%= queueHref() %>">التصحيح</a>
+  <span aria-hidden="true">/</span>
+  <span><%= P.nameQuiz || "تسليم" %></span>
+</nav>
+
+<% if (okMsg) { %>
+<p class="flash flash--ok" role="status">
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="<%= ICON.ok %>" />
+  </svg>
+  <%= okMsg %>
+</p>
+<% } %>
+
+<% if (badMsg) { %>
+<%
+/* A refusal, not a clamp. applyMarks returns the question number and the bound
+   it broke, and nothing was written — so the numbers still on screen are the
+   saved ones, and the boxes still hold what was typed. */
+%>
+<p class="flash flash--bad" role="alert">
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="<%= ICON.bad %>" />
+  </svg>
+  <%= badMsg %>
+</p>
+<% } %>
+
+<section class="panel">
+  <div class="panel__head">
+    <h2 class="panel__title"><%= P.nameQuiz || "—" %></h2>
+    <span class="badge<%= BADGE[T.status] || "" %>">
+      <%= ST_LABEL[T.status] || T.status %>
+    </span>
+  </div>
+
+  <dl class="gmeta">
+    <div class="gmeta__row">
+      <dt>الطالب</dt>
+      <dd>
+        <%= S.fullName || "—" %>
+        <% if (S.cardNumber) { %>
+        <span class="table__code" dir="ltr"><%= S.cardNumber %></span>
+        <% } %>
+      </dd>
+    </div>
+
+    <div class="gmeta__row">
+      <dt>المجموعة والصف</dt>
+      <dd>
+        <% if (S.group) { %><span class="badge"><%= GROUP_MAP[S.group] || S.group %></span><% } %>
+        <% if (S.grade) { %><span class="badge"><%= GRADE_MAP[S.grade] || S.grade %></span><% } %>
+        <% if (!S.group && !S.grade) { %>—<% } %>
+      </dd>
+    </div>
+
+    <div class="gmeta__row">
+      <dt>النوع</dt>
+      <dd>
+        <% if (kindOf) { %><span class="tag"><%= KMAP[kindOf] || kindOf %></span><% } else { %>—<% } %>
+      </dd>
+    </div>
+
+    <div class="gmeta__row">
+      <dt>تاريخ التسليم</dt>
+      <dd>
+        <% if (when) { %>
+        <span class="num" dir="ltr"><%= when %></span>
+        <% } else if (started) { %>
+        <%
+        /* Handed in before submittedAt existed. This is the moment the attempt
+           was OPENED — up to a full paper's time earlier — and it is labelled
+           as that rather than passed off as a hand-in time. */
+        %>
+        <span class="num" dir="ltr"><%= started %></span>
+        <span class="tag">بدء المحاولة</span>
+        <% } else { %>—<% } %>
+        <% if (wasLate) { %>
+        <span class="badge badge--late">
+          متأخر<% if (lateMins) { %>
+          <span class="num" dir="ltr">+<%= lateMins %></span> د<% } %>
+        </span>
+        <% } %>
+      </dd>
+    </div>
+
+    <% if (wasLate) { %>
+    <div class="gmeta__row">
+      <dt>تأخير التسليم</dt>
+      <dd>
+        <span class="num" dir="ltr"><%= lateSecs %></span> ثانية بعد انتهاء الوقت
+        <p class="gmeta__note">
+          تم تسجيل الإجابات وتصحيحها كالمعتاد، وأُضيفت المحاولة إلى قائمة
+          التصحيح لمراجعة التأخير.
+        </p>
+      </dd>
+    </div>
+    <% } %>
+
+    <% if (markedAt) { %>
+    <div class="gmeta__row">
+      <dt>آخر تصحيح</dt>
+      <dd>
+        <span class="num" dir="ltr"><%= markedAt %></span>
+        <% if (markedBy) { %>— <%= markedBy %><% } %>
+      </dd>
+    </div>
+    <% } %>
+  </dl>
+</section>
+
+<%
+/* Auto, manual and final side by side. The final is the number the request
+   asks for — automatic plus manual — and it is derived here and in
+   util/grading, never stored, so there is one definition of it. */
+%>
+<ul class="stats stats--3">
+  <li>
+    <span class="stat">
+      <span class="stat__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="<%= ICON.chart %>" /></svg>
+      </span>
+      <span>
+        <span class="stat__value num" dir="ltr">
+          <%= T.auto == null ? "—" : T.auto + "/" + T.autoOutOf %>
+        </span>
+        <span class="stat__label">تصحيح تلقائي</span>
+      </span>
+    </span>
+  </li>
+  <li>
+    <span class="stat<%= T.pending ? " stat--accent" : "" %>">
+      <span class="stat__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="<%= ICON.pen %>" /></svg>
+      </span>
+      <span>
+        <span class="stat__value num" dir="ltr">
+          <%= T.manualOutOf > 0 ? T.manual + "/" + T.manualOutOf : "—" %>
+        </span>
+        <span class="stat__label">
+          تصحيح يدوي
+          <% if (T.pending) { %>
+          (<span class="num" dir="ltr"><%= T.pending %></span> بدون درجة)
+          <% } %>
+        </span>
+      </span>
+    </span>
+  </li>
+  <li>
+    <span class="stat">
+      <span class="stat__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="<%= ICON.sum %>" /></svg>
+      </span>
+      <span>
+        <span class="stat__value num" dir="ltr">
+          <%= T.final == null ? "—" : T.final + "/" + T.finalOutOf %>
+        </span>
+        <span class="stat__label">الدرجة النهائية</span>
+      </span>
+    </span>
+  </li>
+</ul>
+<%
+/* ONE FORM AROUND EVERY QUESTION, so the whole paper is marked in one submit
+   and the status is recomputed once. The auto-graded cards sit inside it and
+   contribute no fields — they are evidence for the person marking, not input.
+
+   POSTs to this same URL. The filters travel as hidden fields rather than in
+   the action, because the route rebuilds the redirect from req.body through
+   the same whitelists it applies to req.query — a value that reaches a
+   Location header is never trusted just because it came back from our own
+   page. */
+%>
+<form class="gq-form" method="post" action="/grading/<%= A._id %>">
+  <input type="hidden" name="_csrf" value="<%= token %>" />
+  <%
+  /* The queue state the admin came from, so saving returns them to it. Blank
+     values are skipped: an empty `group=` in the redirect is noise that the
+     parser would discard anyway. */
+  %>
+  <% if (FS.group) { %><input type="hidden" name="group" value="<%= FS.group %>" /><% } %>
+  <% if (FS.level) { %><input type="hidden" name="educetionlevel" value="<%= FS.level %>" /><% } %>
+  <% if (FS.grade) { %><input type="hidden" name="grade" value="<%= FS.grade %>" /><% } %>
+  <% if (FS.sort) { %><input type="hidden" name="sort" value="<%= FS.sort %>" /><% } %>
+  <% if (FS.q) { %><input type="hidden" name="q" value="<%= FS.q %>" /><% } %>
+  <% if (KIND) { %><input type="hidden" name="type" value="<%= KIND %>" /><% } %>
+  <% if (STAT) { %><input type="hidden" name="status" value="<%= STAT %>" /><% } %>
+
+  <section class="panel qlist-panel">
+    <div class="panel__head">
+      <h2 class="panel__title">
+        الأسئلة (<span class="num" dir="ltr"><%= ROWS.length %></span>)
+      </h2>
+      <span class="pager__count">
+        <% if (essayRows.length) { %>
+        <span class="num" dir="ltr"><%= essayRows.length %></span> سؤال مقالي يُصحَّح يدويًا
+        <% } else { %>
+        كل الأسئلة تُصحَّح تلقائيًا
+        <% } %>
+      </span>
+    </div>
+
+    <% if (!ROWS.length) { %>
+    <div class="empty-state">
+      <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+        <rect x="9" y="3" width="6" height="4" rx="1" />
+        <path d="M9 12h6M9 16h4" />
+      </svg>
+      <p class="empty-state__title">لا توجد أسئلة في هذه الورقة</p>
+      <p>حُذفت أسئلة الورقة بعد التسليم، فلا شيء هنا لعرضه أو تصحيحه.</p>
+    </div>
+
+    <% } else { %>
+    <ol class="gq">
+      <% for (var r = 0; r < ROWS.length; r++) { var row = ROWS[r]; %>
+      <li class="gq__item<%= row.auto ? "" : " gq__item--manual" %>">
+        <div class="qlist__head">
+          <span class="qlist__no num" dir="ltr"><%= row.no %></span>
+          <p class="qlist__q"><%= row.question || "—" %></p>
+          <span class="qlist__type"><%= TLABEL[row.type] || row.type %></span>
+          <span class="qlist__type">
+            الدرجة <span class="num" dir="ltr"><%= row.maxScore %></span>
+          </span>
+        </div>
+
+        <% if (row.image) { %>
+        <%
+        /* alt="" — the image IS the question here, and the question text is
+           already the paragraph above it; a description would be read twice. */
+        %>
+        <img class="gq__image" src="<%= row.image %>" alt="" loading="lazy" />
+        <% } %>
+
+        <% if (row.auto) { %>
+        <%
+        /* ---- AUTO-GRADED: read-only evidence -------------------------
+           The options with the key marked, then what the student chose and
+           whether it scored. Nothing here is an input: the machine already
+           marked it and re-marking it by hand would put two different totals
+           in the database. */
+        %>
+        <ul class="qlist__choices">
+          <% for (var c = 0; c < (row.options || []).length; c++) { %>
+          <%
+          var opt = String(row.options[c]);
+          var isKey = opt === row.correct;
+          var isPick = !row.unknown && row.answered && opt === row.studentAnswer;
+          %>
+          <li class="<%= isKey ? "is-correct" : "" %><%= isPick ? " is-picked" : "" %>">
+            <span class="qlist__choice"><%= opt %></span>
+            <% if (isKey) { %>
+            <span class="qlist__flag">الإجابة الصحيحة</span>
+            <% } %>
+            <% if (isPick) { %>
+            <span class="qlist__flag gq__pick">اختيار الطالب</span>
+            <% } %>
+          </li>
+          <% } %>
+        </ul>
+
+        <div class="gq__verdict">
+          <% if (row.unknown) { %>
+          <%
+          /* This attempt was handed in before individual choices were stored:
+             the answer was compared to the key and discarded, and only the
+             total survived. Saying so is the only honest option — a blank
+             cell here would read as "the student answered nothing", which is
+             a different and false claim. */
+          %>
+          <p class="gq__unknown">
+            إجابة الطالب لهذا السؤال غير متاحة — سُلّمت هذه الورقة قبل تفعيل حفظ
+            الإجابات، فلم يُحفظ منها إلا المجموع. الدرجة التلقائية أعلاه صحيحة.
+          </p>
+          <% } else { %>
+          <p class="gq__answer">
+            <span class="gq__answer-label">إجابة الطالب:</span>
+            <% if (row.answered) { %>
+            <span class="gq__answer-text"><%= row.studentAnswer %></span>
+            <% } else { %>
+            <span class="gq__answer-text gq__answer-text--none">لم يُجب</span>
+            <% } %>
+          </p>
+          <span class="score <%= row.isCorrect ? "score--pass" : "score--fail" %>">
+            <%= row.isCorrect ? "صحيحة" : "خطأ" %>
+            <span class="num" dir="ltr"><%= row.earned %>/<%= row.maxScore %></span>
+          </span>
+          <% } %>
+        </div>
+
+        <% } else { %>
+        <%
+        /* ---- EXPLAIN: the part a human does ---------------------------- */
+        %>
+        <div class="gq__written">
+          <p class="gq__answer-label">إجابة الطالب</p>
+          <% if (row.answered) { %>
+          <%
+          /* .gq__written-text is white-space: pre-wrap, so the paragraphs the
+             student typed survive. The interpolation below is the escaping
+             kind, so the answer is text and never markup, however it was
+             typed.
+
+             Do NOT write a literal example of an EJS tag in here: the scanner
+             looks for the closing delimiter lexically, with no notion of
+             JavaScript comments, so the sequence would end this scriptlet
+             mid-sentence and dump the rest of the comment onto the page. */
+          %>
+          <p class="gq__written-text"><%= row.text %></p>
+          <% } else { %>
+          <p class="gq__written-text gq__answer-text--none">
+            ترك الطالب هذا السؤال فارغًا. ما زال بحاجة إلى درجة — اكتب
+            <span class="num" dir="ltr">0</span> لاعتماده.
+          </p>
+          <% } %>
+        </div>
+
+        <% if (row.model) { %>
+        <p class="qlist__model">
+          <span class="qlist__model-label">الإجابة النموذجية:</span>
+          <%= row.model %>
+        </p>
+        <% } else { %>
+        <p class="qlist__model qlist__model--none">
+          بدون إجابة نموذجية — قدّر الدرجة من نص السؤال.
+        </p>
+        <% } %>
+
+        <div class="gq__mark">
+          <div class="form-field form-field--sm gq__mark-score">
+            <label class="label" for="score_<%= row.index %>">
+              الدرجة (من <span class="num" dir="ltr"><%= row.maxScore %></span>)
+            </label>
+            <%
+            /* NOT required: a blank box means "not marked yet", which is what
+               lets a long paper be marked in more than one sitting. Awarding
+               nothing is done by typing 0 — a real mark that moves the paper
+               to "تم التصحيح".
+
+               min/max/step are the browser's copy of the server's rule, not
+               the rule itself: util/grading.applyMarks re-checks every value
+               and refuses the whole save on a breach, because these attributes
+               are trivially bypassed and a mark is a permanent record. */
+            %>
+            <input
+              class="input input--ltr"
+              type="number"
+              id="score_<%= row.index %>"
+              name="score_<%= row.index %>"
+              value="<%= row.score === null ? "" : row.score %>"
+              min="0"
+              max="<%= row.maxScore %>"
+              step="1"
+              inputmode="numeric"
+              autocomplete="off"
+              placeholder="—"
+            />
+            <p class="field-hint">
+              اتركها فارغة لتأجيل تصحيح هذا السؤال.
+            </p>
+          </div>
+
+          <div class="form-field gq__mark-feedback">
+            <label class="label" for="feedback_<%= row.index %>">ملاحظات للطالب</label>
+            <textarea
+              class="input"
+              id="feedback_<%= row.index %>"
+              name="feedback_<%= row.index %>"
+              maxlength="<%= FBMAX %>"
+              rows="2"
+              autocomplete="off"
+            ><%= row.feedback %></textarea>
+            <p class="field-hint">اختياري. يراها الطالب مع درجته.</p>
+          </div>
+        </div>
+        <% } %>
+      </li>
+      <% } %>
+    </ol>
+    <% } %>
+  </section>
+
+  <%
+  /* The save button is rendered only when there is something to save. On a
+     paper with no essay questions this page is a read-only record, and a
+     button that posts an empty round of marks would be a lie about what it
+     does. */
+  %>
+  <%
+  /* The row exists only when there is something to submit. With no essay
+     questions the page is read-only, and a "form-actions" row holding a single
+     link is not an actions row — it is navigation wearing a button's clothes.
+     The crumbs at the top already point at the queue, with the same href.
+
+     "إلغاء" rather than the old "رجوع للقائمة": the link's job here is to leave
+     without saving, which is what every other form on the dashboard calls
+     إلغاء. Naming the destination as well made it the only secondary action
+     with two jobs, and it duplicated the crumb verbatim. */
+  %>
+  <% if (essayRows.length) { %>
+  <div class="form-actions">
+    <button class="btn btn--primary" type="submit">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="<%= ICON.ok %>" />
+      </svg>
+      حفظ التصحيح
+    </button>
+    <a class="btn btn--ghost" href="<%= queueHref() %>">إلغاء</a>
+  </div>
+  <% } %>
+</form>
+
+<%- include("_foot") %>
+

@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const contro = require("../controllers/signup.contr");
-const csrf = require("csurf");
-const csrfProtect = csrf({cookie:true}) 
+/* Configured in util/csrf.js rather than inline: the csrf({cookie:true}) default
+   left the secret cookie script-readable and non-Secure. */
+const csrfProtect = require("../util/csrf");
 router.get('/login',csrfProtect,(req,res)=>{
     res.render('login.ejs',{
         errorLogin:req.flash('loginError'),

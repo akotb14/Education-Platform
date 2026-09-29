@@ -18,22 +18,39 @@ const getData = async (req, res) => {
     const findMonth = await month.find({ educetionlevel: edu, grade: grd });
     const getmonthofuser = await user.findOne({ _id: student.studentCard });
 
-    /* getmonthofuser['month'] used to be read unconditionally. findOne returns
-       null whenever the account behind an otherwise-valid cookie is gone —
-       deleted from /student while the student still had a session — and the
-       property access then threw, so the catch below turned an ordinary
-       "no months yet" visit into a bare 404 with nothing on screen.
-       Falling back to [] lets the view render its empty state instead. */
     const unlocked =
       getmonthofuser && Array.isArray(getmonthofuser.month)
         ? getmonthofuser.month
         : [];
+
+    /* The admin sees every month of every grade, unlocked.
+
+       Not a convenience: it is the only way the admin can reach the content
+       at all. addAdmin (app.js) creates the admin document with fullName,
+       phoneNumber, cardNumber, password and admin:"true" — and nothing else.
+       No educetionlevel, no grade, no month array. So for an admin:
+
+         · month.ejs skipped EVERY row, because it compares each row's
+           educetionlevel against the signed-in user's, and undefined never
+           equals "biology". The page rendered as "this is not your grade"
+           for all six subject/grade combinations.
+         · `unlocked` was [] regardless, so nothing would have been open even
+           if the rows had survived the filter.
+         · isMonth answered a bare 404 for every /lessons/… and /content/…
+           URL, since Array.isArray(undefined) is false.
+
+       Read off the DATABASE document, not the JWT claim. Both carry the flag
+       — util/aurth.js trusts the claim — but the doc is already loaded here,
+       and a cookie minted before an admin was demoted still claims
+       admin:"true" until it expires. The doc is the current answer. */
+    const unlockAll = !!(getmonthofuser && getmonthofuser.admin == "true");
 
     res.render("month.ejs", {
       data: findMonth,
       edu: edu,
       grd: grd,
       month: unlocked,
+      unlockAll: unlockAll,
       student: student,
       name: req.cookies.student,
     });

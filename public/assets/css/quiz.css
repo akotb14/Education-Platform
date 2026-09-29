@@ -195,103 +195,602 @@
   margin-inline: auto;
 }
 
-/* --------------------------------------------------------------- timer ---
-   Sticky so it stays reachable on a long paper. Offset by the site header so
-   the two never overlap. Rendered only when the paper is timed — homework has
-   no limit, and previously showed a countdown reading "00:00:00" regardless. */
-.paper__timer {
-  position: sticky;
-  inset-block-start: calc(var(--header-h) + var(--sp-2));
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-3);
-  margin-block-end: var(--sp-6);
-  padding: var(--sp-3) var(--sp-5);
-  background: var(--glass-bg-strong);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--c-line);
-  border-radius: var(--r-pill);
-  box-shadow: var(--sh-1);
+/* Extra room under the assessment bar, and less above the first question: on a
+   paper the bar IS the page header, so the usual --section-y gap would push the
+   first question most of a screen down. */
+.section--paper {
+  padding-block: var(--sp-6) var(--section-y);
 }
 
-.paper__timer svg {
-  inline-size: 20px;
-  block-size: 20px;
-  flex: none;
+/* ================================================== assessment bar =========
+   THE PAPER'S OWN HEADER. What is being sat, how far through it the student is,
+   how long is left, and a pad to jump between questions.
+
+   WHAT THIS REPLACES. The countdown used to be .paper__timer, a sticky pill
+   nested INSIDE .paper directly above the form. Two problems, both of which
+   this fixes:
+
+     1. It read as part of the first question. It sat in the question column,
+        at the question column's width, with the first .q immediately under it.
+     2. Sticky positioning is scoped to the nearest scrolling ancestor and
+        offset from it — the pill stuck to the top of .paper, so it was only on
+        screen while .paper's own box was. Nesting it in the content it was
+        meant to outlive was the whole problem the brief describes.
+
+   It is now a page-level element, a direct child of <body>, sticking to the
+   viewport for the entire sitting.
+
+   IT CANNOT OVERLAP A QUESTION. `position: sticky` — not fixed — leaves the
+   element in normal flow, so it reserves its own height and the content after
+   it starts below it. A fixed bar would need a body padding matched by hand to
+   a height that changes with the pad's wrapping, and would drift out of step
+   with it at the first long paper on a narrow screen.
+
+   Z-INDEX. --z-header (100), the top of the page's ordinary stack, so nothing
+   in the question column can paint over it. It used to be calc(--z-header - 1),
+   i.e. 99, chosen so the site header's shadow won where the two met — but the
+   site header is NOT sticky on a paper page (.paper-page rule below), so there
+   was no overlap to lose and the bar was ranked below an element it is supposed
+   to replace. The submit dialog stays above at --z-progress + 10 (120).
+
+   THE SITE HEADER IS HIDDEN WHILE SITTING (.paper-page below): it carries a
+   logo and no navigation on this page, so leaving it stuck above the bar would
+   spend 72px of a phone screen on a link the student should not be taking
+   mid-attempt.
+
+   NOTHING MAY REFLOW THIS ELEMENT. Its height is what the content offset below
+   is measured against, so every rule inside it is written to hold one height:
+   the title truncates rather than wrapping, the clock is tabular-nums, the crit
+   state animates opacity only, and the pad scrolls instead of wrapping. */
+.abar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--z-header);
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.6);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.6);
+  /* A hairline, and no shadow. The border alone separates the bar from the
+     content scrolling under it; --sh-1 on top of it was a second separator
+     doing the same job, and read as a raised panel rather than a page edge. */
+  border-block-end: 1px solid var(--c-line);
+}
+
+.abar__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  width: 100%;
+  max-width: var(--container);
+  margin-inline: auto;
+  padding: var(--sp-3) var(--gutter);
+}
+
+/* Name of the paper, with its kind above it. min-inline-size: 0 is what lets
+   the title truncate instead of shoving the clock off the row — a flex item's
+   default min-inline-size is auto, i.e. its content, so without this a long
+   name simply refuses to shrink. */
+.abar__id {
+  min-inline-size: 0;
+  flex: 1;
+}
+
+.abar__kind {
+  display: block;
+  font-size: var(--fs-xs);
+  font-weight: 700;
   color: var(--c-primary);
 }
 
-.paper__timer-label {
+.abar__title {
+  margin: 0;
+  font-size: var(--fs-base);
+  font-weight: 800;
+  line-height: var(--lh-tight);
+  color: var(--c-ink);
+  /* One line: the bar's height is what the sticky offset of everything below
+     it depends on, so the title is not allowed to reflow it. The full name is
+     on the title attribute. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "السؤال 3 من 20" — the position half of the progress indicator; the pad
+   below is the other half. Updated by quiz.js from whichever question is in
+   view, so it tracks scrolling as well as jumps. */
+.abar__pos {
+  flex: none;
+  margin: 0;
   font-size: var(--fs-sm);
   color: var(--c-muted);
 }
 
+.abar__pos strong {
+  color: var(--c-ink);
+}
+
+/* ---------------------------------------------------------------- clock ---
+   Rendered only on a timed paper. Homework has no limit and used to draw this
+   anyway, showing a countdown stuck at 00:00:00. */
+.abar__timer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-pill);
+  /* Colour is the only thing the three states change, so it is set once here
+     and inherited by both the glyph (fill: currentColor) and the digits. */
+  color: var(--c-ink);
+  transition: color var(--dur-2) var(--ease),
+    background-color var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease);
+}
+
+.abar__timer svg {
+  inline-size: 18px;
+  block-size: 18px;
+  flex: none;
+  color: var(--c-muted);
+}
+
 /* A clock reading is a Latin digit run inside an RTL line. Without isolation
-   the colon is a neutral and the segments can reorder, so 01:20 renders as
-   20:01. The markup also carries dir="ltr" on this element. */
-.paper__clock {
+   the colon is a bidi neutral and the segments can reorder, so 01:20 renders
+   as 20:01. The markup also carries dir="ltr" on this element.
+   tabular-nums stops the width jittering as the digits change. */
+.abar__clock {
   font-weight: 800;
   font-size: var(--fs-lg);
-  color: var(--c-ink);
+  line-height: 1.2;
   unicode-bidi: isolate;
   font-variant-numeric: tabular-nums;
 }
 
-.paper__timer--low .paper__clock {
-  color: var(--c-bad);
+/* THE THREE STATES the brief asks for. There was only one before (--low), so
+   a paper went from "plenty of time" straight to "red" with nothing between.
+
+   Normal is the rule above: ink on white, quiet, and deliberately not
+   attention-seeking — a clock that shouts for twenty minutes stops being read.
+
+   --low (last quarter, floor 5 min) warms to the brand red on its tint. Its
+   own colour, not --c-bad: this is "keep an eye on it", not an error.
+
+   --crit (last minute, or last tenth) is solid red, and the only state that
+   moves. The pulse is opacity, not transform or box-shadow: opacity composites
+   on the GPU and cannot reflow the bar, whose height everything below is
+   positioned against.
+
+   The state is ALSO announced once on entry through a separate polite live
+   region, and the clock keeps its digits at every state, so neither the colour
+   nor the animation is the only signal. */
+.abar__timer--low {
+  color: var(--c-primary-dark);
+  background: var(--c-primary-tint);
+  border-color: rgb(254 63 64 / 0.35);
 }
 
-.paper__timer--low svg {
-  color: var(--c-bad);
+.abar__timer--low svg {
+  color: var(--c-primary-dark);
 }
 
-/* Progress is animated as a percentage inline-size rather than scaleX:
-   transform does not mirror under dir="rtl", so scaleX would grow from the
-   wrong edge and need an override. inline-size follows the writing mode. */
-.paper__track {
-  flex: 1;
-  min-inline-size: 80px;
-  block-size: 6px;
-  overflow: hidden;
-  background: var(--c-line);
-  border-radius: var(--r-pill);
-}
-
-.paper__bar {
-  block-size: 100%;
-  inline-size: 100%;
-  background: var(--grad-brand);
-  border-radius: var(--r-pill);
-  transition: inline-size 1s linear;
-}
-
-.paper__timer--low .paper__bar {
+.abar__timer--crit {
+  color: #fff;
   background: var(--c-bad);
+  border-color: var(--c-bad);
+  animation: abar-pulse 1.6s var(--ease) infinite;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .paper__bar {
-    transition: none;
+.abar__timer--crit svg {
+  color: #fff;
+}
+
+@keyframes abar-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.66;
   }
 }
 
-/* ------------------------------------------------------------ question ---- */
+/* --------------------------------------------------------- time remaining ---
+   A hairline across the foot of the bar. Animated as a percentage inline-size
+   rather than scaleX: transform does not mirror under dir="rtl", so scaleX
+   would grow from the wrong edge and need an override; inline-size follows the
+   writing mode. */
+.abar__track {
+  block-size: 3px;
+  overflow: hidden;
+  background: var(--c-line);
+}
+
+.abar__bar {
+  display: block;
+  block-size: 100%;
+  inline-size: 100%;
+  background: var(--grad-brand);
+  transition: inline-size 1s linear, background-color var(--dur-2) var(--ease);
+}
+
+/* Set on the bar, matching the clock's states — the .abar__timer--* classes
+   are on a sibling, so these are toggled separately by quiz.js rather than
+   inherited through a descendant selector. */
+.abar__bar--low {
+  background: var(--c-primary);
+}
+
+.abar__bar--crit {
+  background: var(--c-bad);
+}
+
+/* ------------------------------------------------------------ question pad ---
+   Which question is open, which are answered, a jump to any of them, and a
+   step to the previous or next one. There was no question navigation on this
+   page at all before — only "answered N of M" in the foot, at the very bottom
+   of a long paper.
+
+   Second row of the bar, under a hairline, which is the structure the brief
+   asks for: identity, position and clock on the first line, navigation on the
+   second.
+
+   THE PAD SCROLLS, IT DOES NOT WRAP. A 20-question paper would otherwise be
+   four rows of chips, and the bar's height would change with the viewport and
+   with the number of questions — which is the same height everything below is
+   offset against. One row, always. overscroll-behavior-inline keeps a swipe on
+   the pad from turning into a browser back-gesture. */
+.qnav {
+  border-block-start: 1px solid var(--c-line);
+}
+
+.qnav__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  max-width: var(--container);
+  margin-inline: auto;
+  padding: var(--sp-2) var(--gutter);
+}
+
+/* "التنقل بين الأسئلة" — the nav's own label, visible rather than sr-only, so
+   the row reads as a labelled control group instead of a strip of loose
+   numbers. Hidden under 560px, where the row needs the width more than the
+   student needs telling what a row of numbered buttons is; the <nav> keeps its
+   aria-label either way, so nothing is lost to a screen reader. */
+.qnav__label {
+  flex: none;
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--c-muted);
+}
+
+.qnav__list {
+  display: flex;
+  gap: var(--sp-2);
+  flex: 1;
+  min-inline-size: 0;
+  margin: 0;
+  /* ROOM FOR THE FOCUS RING, and why it is needed here specifically.
+     `overflow-x: auto` does not leave the other axis visible — per spec a
+     non-visible value on one axis computes `visible` on the other to `auto` — so
+     this box clips vertically as well as horizontally. A chip filling its height
+     exactly would have its focus outline cut off at both edges, which is the one
+     thing a keyboard student cannot do without. The padding gives the ring room
+     and the negative margin gives the space back, so the row is no taller. */
+  padding-block: 4px;
+  margin-block: -4px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  list-style: none;
+}
+
+/* Pulled in from the global 3px, which would not fit the 4px reserved above.
+   Still 3px wide and still --c-focus, so it reads as the same ring. */
+.qnav__item:focus-visible {
+  outline-offset: 1px;
+}
+
+/* 34px, under the 44px tap minimum — so the pad is a shortcut, not the only way
+   to reach a question. Every question is also reachable by scrolling and by the
+   step buttons beside the pad, whose own targets are full height. */
+.qnav__item {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 34px;
+  block-size: 34px;
+  padding: 0;
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--c-muted);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-1) var(--ease),
+    background-color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .qnav__item:hover {
+    border-color: var(--c-primary);
+    color: var(--c-primary);
+  }
+}
+
+/* ANSWERED — filled, in the brand tint. Distinguishable from untouched by
+   fill AND by weight, and the state is written into the button's own
+   .sr-only span as words, because a wall of 20 numbered chips tells a screen
+   reader nothing on its own. */
+.qnav__item--done {
+  color: var(--c-primary-dark);
+  background: var(--c-primary-tint);
+  border-color: rgb(254 63 64 / 0.35);
+}
+
+/* CURRENT — solid brand red against the answered chip's pale tint, which is a
+   dark/light difference and so survives greyscale on its own. aria-current is
+   set alongside it.
+
+   The 4px double-ring halo this replaces overflowed the --sp-2 gap and touched
+   its neighbours, so the pad looked crowded at exactly the moment it was
+   telling the student where they were. */
+.qnav__item--now {
+  color: #fff;
+  background: var(--c-primary);
+  border-color: var(--c-primary);
+}
+
+/* ------------------------------------------------------------ step buttons ---
+   Previous and next. Same height as a chip and pinned outside the pad's scroll
+   container, so they stay reachable on a 20-question paper where chip 14 is off
+   screen.
+
+   Disabled at the two ends rather than wrapping around: `disabled` is a real
+   button state a screen reader announces, and it cannot be focused, so a
+   keyboard student is not sent to a control that does nothing. quiz.js sets it.
+
+   These do NOT submit and do NOT change the layout of anything: they scroll the
+   page, exactly as a pad chip does. type="button" in the markup is what keeps
+   them out of the form's submit path. */
+.qnav__step {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 34px;
+  block-size: 34px;
+  padding: 0;
+  color: var(--c-muted);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
+}
+
+.qnav__step svg {
+  inline-size: 18px;
+  block-size: 18px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .qnav__step:not(:disabled):hover {
+    color: var(--c-primary);
+    border-color: var(--c-primary);
+  }
+}
+
+.qnav__step:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* .q::before is deliberately NOT in this list even though it transitions.
+
+   A media query adds no specificity, so `transition: none` here and the
+   `transition: opacity …` on .q::before are equally specific and source order
+   decides — and .q::before is declared 130 lines further down, so it would win
+   and the reduced-motion request would be silently ignored. Its own override
+   sits directly after it instead. Everything listed below is declared above this
+   block, so for these the order is right. */
+@media (prefers-reduced-motion: reduce) {
+  .abar__bar,
+  .abar__timer,
+  .qnav__item,
+  .qnav__step {
+    transition: none;
+  }
+
+  .abar__timer--crit {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------- narrow ------
+   Under 560px the row cannot hold four things. The title and the clock stay on
+   the first line — those are the two the brief calls out — and the position
+   text moves under them, where it costs one short line rather than squeezing
+   the clock. */
+@media (max-width: 559px) {
+  .abar__inner {
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-3);
+    padding-block: var(--sp-2);
+  }
+
+  .abar__id {
+    /* Force the wrap: the id and the clock take the first line, and .abar__pos
+       gets the second because this basis leaves it no room on the first. */
+    flex-basis: 60%;
+  }
+
+  .abar__pos {
+    flex-basis: 100%;
+    font-size: var(--fs-xs);
+  }
+
+  .abar__timer {
+    padding: var(--sp-1) var(--sp-3);
+  }
+
+  .abar__clock {
+    font-size: var(--fs-base);
+  }
+
+  .qnav__inner {
+    gap: var(--sp-2);
+    padding-block: var(--sp-1);
+  }
+
+  /* The row needs the width for chips and the two step buttons. The <nav> keeps
+     its aria-label, so the group is still named for assistive tech. */
+  .qnav__label {
+    display: none;
+  }
+}
+
+/* .paper-page is on <body> only while a paper is being answered. The site
+   header on this page is a logo with no navigation — see the comment in
+   quiz-paper.ejs — so on a paper it gives up the top of the viewport to the
+   assessment bar instead of stacking above it.
+
+   Not display:none: the logo stays a way home, and removing a focusable
+   element from the tab order changes what the first Tab press does. It simply
+   stops being sticky, and scrolls away like ordinary content.
+
+   This rule ON ITS OWN was not enough, and it is worth recording why, because
+   the fix looks like it should have lived here. A sticky element pins when the
+   scroll reaches it, so with the header above the bar in the document the bar's
+   resting position was 73px down — measured — no matter what `position` the
+   header had, because a static box still occupies its space in flow. The bar
+   only reaches the top of the viewport because the header now comes after it in
+   quiz-paper.ejs. This rule still matters: without it the header would pin at
+   top:0 and cover the bar. */
+.paper-page .site-header {
+  position: static;
+}
+
+/* THE NATIVE SCROLL OFFSET, for the scrolls no rule here owns: the browser
+   scrolling a focused control into view when Tab reaches a radio near the top of
+   a question that is sitting under the bar.
+
+   home.css sets this globally to --header-h + --sp-4 = 88px, sized for the 72px
+   site header. On a paper the site header is not sticky and the assessment bar
+   is, and the bar is taller — so without an override those scrolls land under
+   it. Same measured --abar-h everything else uses.
+
+   ON <html>, NOT ON .paper-page. scroll-padding applies to a scroll container,
+   and the container for the document is the viewport, which takes its value from
+   the root element — the same declaration on <body> would be inert. The class is
+   on <body>, hence :has().
+
+   Progressive: where :has() is unavailable this falls back to the global 88px,
+   and the question cards still land correctly, because .q carries its own
+   scroll-margin and that is what governs a jump, a fragment or a scrollIntoView
+   targeting a question. */
+html:has(body.paper-page) {
+  scroll-padding-block-start: calc(var(--abar-h, 8rem) + var(--sp-4));
+}
+
+/* ------------------------------------------------------------ question ----
+   scroll-margin-block-start is what makes the jump pad land correctly: the
+   assessment bar is sticky, so scrolling an element to the top of the viewport
+   puts it UNDER the bar. This reserves the bar's height plus a gap, and applies
+   to every scroll — the pad's scrollIntoView, the missing-answer scroll, and a
+   plain #q3 fragment alike, so none of them needs its own offset arithmetic.
+
+   --abar-h IS MEASURED, NOT GUESSED. quiz.js reads the bar's real height and
+   writes it to :root; the 8rem is only the value used before the script runs
+   and if it never does. There used to be two separate hardcoded guesses at this
+   height — 8rem here and a -140px rootMargin in the observer — and they
+   disagreed with each other and with the actual bar, which is a different
+   height on an untimed paper, on a single-question paper, and on a phone where
+   the row wraps. Both now read the one measured number.
+
+   Measuring is not repositioning: the bar's own placement is pure CSS sticky.
+   What the script computes is how far to hold the CONTENT clear of it. */
 .q {
+  /* position: relative for the current-question marker, which is a pseudo
+     element rather than a border — see .q.is-current. */
+  position: relative;
   padding: var(--sp-6);
   background: var(--c-surface);
   border: 1px solid var(--c-line);
   border-radius: var(--r-lg);
   box-shadow: var(--sh-1);
+  scroll-margin-block-start: calc(var(--abar-h, 8rem) + var(--sp-4));
+}
+
+/* THE CURRENT-QUESTION MARKER, and why it is a pseudo element.
+
+   It used to be `border-inline-start: 3px` on .is-current against 1px on .q,
+   which widened the border by 2px and pulled the card's whole content 2px
+   sideways every time the current question changed — i.e. on every pad jump and
+   on every scroll that moved the observer. That is a layout jump, on exactly the
+   interactions this bar exists to drive.
+
+   Drawn instead as a bar that is always in the layout and only changes colour,
+   so nothing resizes. It is inset from the corners rather than running the full
+   edge, which keeps it clear of the --r-lg radius without needing a matching
+   radius of its own. inset-inline-start, so it is on the reading edge under
+   dir="rtl" — a physical `left` or an inset box-shadow would not mirror. */
+.q::before {
+  content: "";
+  position: absolute;
+  inset-block: var(--sp-6);
+  inset-inline-start: -1px;
+  inline-size: 3px;
+  background: var(--c-primary);
+  border-radius: var(--r-pill);
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease);
+}
+
+/* Immediately after the rule it overrides, not up in the block with the rest of
+   the reduced-motion resets: a media query carries no extra specificity, so the
+   later declaration wins and this has to be the later one. */
+@media (prefers-reduced-motion: reduce) {
+  .q::before {
+    transition: none;
+  }
 }
 
 .q + .q {
   margin-block-start: var(--sp-5);
 }
 
-/* Marks a question left blank once the student has tried to submit. */
+/* The question in view. The reading-edge bar becomes visible and the border
+   warms — enough to answer "where am I" when the pad says 3 of 20, and quiet
+   enough not to compete with .is-missing.
+
+   Both properties are already in the layout at the same size on every .q, so
+   becoming current cannot move anything. The shadow deliberately does NOT
+   change: --sh-1 -> --sh-2 is a larger blur, and a shadow does not take part in
+   layout, but the pair read as the card lifting on a page where the only thing
+   that should be moving is the content under a fixed bar. */
+.q.is-current {
+  border-color: rgb(254 63 64 / 0.35);
+}
+
+.q.is-current::before {
+  opacity: 1;
+}
+
+/* Marks a question left blank once the student has tried to submit.
+
+   AFTER .is-current deliberately. Both set border-color at the same
+   specificity, and a question can be both — the one the student is looking at,
+   in a paper they just tried to submit with blanks. Source order is what
+   decides, and "you have not answered this" has to outrank "you are here". The
+   current-question bar keeps showing underneath, so neither state is lost. */
 .q.is-missing {
   border-color: var(--c-bad);
   box-shadow: 0 0 0 3px var(--c-bad-tint);
@@ -300,7 +799,7 @@
 .q__head {
   display: flex;
   align-items: flex-start;
-  gap: var(--sp-3);
+  gap: var(--sp-4);
   margin-block-end: var(--sp-5);
 }
 
@@ -319,6 +818,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The question and its type, stacked. min-inline-size: 0 so a long unbroken
+   Latin term shrinks the block rather than pushing the badge out of the card. */
+.q__headings {
+  min-inline-size: 0;
+  flex: 1;
+}
+
 .q__text {
   font-size: var(--fs-lg);
   font-weight: 700;
@@ -328,6 +834,16 @@
   margin: 0;
   /* The paper is Arabic but a question may be a Latin formula or term. */
   overflow-wrap: anywhere;
+}
+
+/* What kind of answer is expected — "اختيار واحد", "صح أو خطأ", "سؤال مقالي".
+   Deliberately the smallest, quietest text in the card: it is a hint about the
+   controls directly below it, not a heading, and each element does one job. */
+.q__kind {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--c-muted);
 }
 
 /* The old page hard-coded width="400px" on every question image, so on a
@@ -404,10 +920,119 @@
   overflow-wrap: anywhere;
 }
 
+/* A, B, C, D. Display only — the posted value is still the option's text, which
+   is what the grader compares against the stored key. It exists so a student
+   can hold "I picked C" in their head while scrolling, and so the options read
+   as a set rather than as four sentences. */
+.opt__mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 26px;
+  block-size: 26px;
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  color: var(--c-muted);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+}
+
+.opt:has(input:checked) .opt__mark {
+  color: #fff;
+  background: var(--c-primary);
+  border-color: var(--c-primary);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .opt {
     transition: none;
   }
+}
+
+/* ----------------------------------------------------------- true / false ---
+   True and False are stored byte-identically to a two-option multiple choice —
+   same `answer` array, same `correctAnswer` text, same answer<i> POST field —
+   so telling them apart is purely a view decision, taken from the question's
+   qType. Nothing here changes what is submitted.
+
+   Two equal columns side by side rather than a stack: the choice is a pair, and
+   showing it as one makes it read at a glance instead of as the first two of a
+   longer list. Collapses to a stack under 560px, where two 52px cards side by
+   side leave no room for the words. */
+.q__options--tf {
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+}
+
+@media (max-width: 559px) {
+  .q__options--tf {
+    grid-template-columns: 1fr;
+  }
+}
+
+.opt--tf {
+  justify-content: center;
+  padding-block: var(--sp-4);
+  font-weight: 700;
+}
+
+/* The tick and cross. Reinforcement only: the option's own text ("صح" / "خطأ")
+   is still there and still the label, so a paper whose two options are some
+   other pair of words loses nothing but the glyph. */
+.opt__glyph {
+  inline-size: 22px;
+  block-size: 22px;
+  flex: none;
+  color: var(--c-muted);
+}
+
+.opt--tf:has(input:checked) .opt__glyph {
+  color: var(--c-primary);
+}
+
+/* ------------------------------------------------------- written answer ---- */
+/* An essay question. No radios, so nothing above applies — this is the whole
+   input for the question. */
+.q__written {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+/* Sized for a paragraph or two, and resizable upward only: a student writing
+   a long answer on a phone needs the room, but shrinking it below a few lines
+   hides text they have already typed. font: inherit because a bare textarea
+   otherwise renders in the UA monospace default — Latin, and at the wrong
+   size for Arabic. */
+.q__textarea {
+  inline-size: 100%;
+  min-block-size: 9rem;
+  padding: var(--sp-3) var(--sp-4);
+  font: inherit;
+  line-height: var(--lh-body);
+  color: var(--c-ink);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  resize: vertical;
+  transition: border-color var(--dur-1) var(--ease);
+}
+
+.q__textarea:focus-visible {
+  outline: 3px solid var(--c-focus);
+  outline-offset: 2px;
+  border-color: var(--c-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .q__textarea {
+    transition: none;
+  }
+}
+
+.q__note {
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
 }
 
 /* -------------------------------------------------------------- submit ---- */
@@ -425,6 +1050,16 @@
   box-shadow: var(--sh-1);
 }
 
+/* The answered tally and its meter. Distinct from the time bar in the
+   assessment bar: this one only ever grows, and it is the answer to "have I
+   finished" rather than "how long have I got". */
+.paper__tally {
+  display: grid;
+  gap: var(--sp-2);
+  min-inline-size: 0;
+  flex: 1;
+}
+
 .paper__count {
   font-size: var(--fs-sm);
   color: var(--c-muted);
@@ -435,8 +1070,67 @@
   color: var(--c-ink);
 }
 
+.paper__meter {
+  display: block;
+  max-inline-size: 18rem;
+  block-size: 6px;
+  overflow: hidden;
+  background: var(--c-line);
+  border-radius: var(--r-pill);
+}
+
+/* Starts at zero and is set by quiz.js. inline-size, not scaleX — transforms do
+   not mirror under dir="rtl". */
+.paper__meter-fill {
+  display: block;
+  block-size: 100%;
+  inline-size: 0;
+  background: var(--grad-brand);
+  border-radius: var(--r-pill);
+  transition: inline-size var(--dur-2) var(--ease);
+}
+
+/* Submit and exit. The submit button is the primary and comes first in the
+   source, so it is also first in the tab order. */
+.paper__actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paper__meter-fill {
+    transition: none;
+  }
+}
+
+/* Under 560px the two buttons go full width and stack — a phone-width row puts
+   "الخروج بدون تسليم" directly beside the submit button at thumb height, which
+   is the one mis-tap on this page that cannot be undone. */
+@media (max-width: 559px) {
+  .paper__foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .paper__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 /* Warning shown when the student submits with questions still blank. Hidden
-   until JS sets [hidden] off, and never blocks submission on its own. */
+   until JS sets [hidden] off, and never blocks submission on its own.
+
+   Same trap as .cdlg[hidden] below: `display: flex` on a class outranks the UA
+   stylesheet's `[hidden] { display: none }`, so the attribute would be ignored
+   and the warning would show on load, before anything is wrong. */
+.paper__warn[hidden] {
+  display: none;
+}
+
 .paper__warn {
   display: flex;
   align-items: center;
@@ -456,6 +1150,115 @@
   flex: none;
 }
 
+/* ------------------------------------------------------ confirm submit -----
+   Shown before the paper is handed in, on both paths: with blanks it says how
+   many, and with everything answered it still asks. Submitting is irreversible
+   — one attempt, no re-entry — so it does not happen on a single click.
+
+   WHAT THIS REPLACES: pressing submit with blanks used to preventDefault(),
+   set a flag, and rely on the student pressing the same button a second time.
+   Nothing said a second press was needed, and with everything answered there
+   was no confirmation at all.
+
+   NOT <dialog>: showModal() is the right API, but the fallback when it is
+   missing is a non-modal element with no backdrop, and this page must behave
+   identically whether or not the browser cooperates. A plain [hidden] overlay
+   with aria-modal on the panel does the same job with no branch.
+
+   The overlay lives OUTSIDE the form (see quiz-paper.ejs): a button inside it
+   would submit the paper on a stray Enter press, which is the opposite of a
+   confirmation. With JavaScript off it stays hidden and the submit button posts
+   directly — which is the behaviour a timed paper has to keep. */
+/* THIS RULE IS LOAD-BEARING, and its absence was a live bug.
+
+   The overlay ships with the `hidden` attribute and quiz.js removes it to open
+   the dialog. But `hidden` works through the UA stylesheet's `[hidden] {
+   display: none }`, which is a single attribute selector — and `.cdlg` below
+   sets `display: grid`. A class beats an attribute selector, so the UA rule lost
+   and the overlay was laid out over the whole paper from the moment the page
+   loaded: elementFromPoint in the middle of the question column returned .cdlg,
+   not the question. Every click on a question, an option or a pad chip was
+   landing on a 100%-viewport fixed layer.
+
+   `display: none` here, at the same specificity as the rule it has to beat and
+   before it, so `hidden` means hidden again. Not [hidden] alone as a global —
+   scoping it to .cdlg keeps this a fix for the element that broke it. */
+.cdlg[hidden] {
+  display: none;
+}
+
+.cdlg {
+  position: fixed;
+  inset: 0;
+  /* Above the assessment bar and the site header both: while this is open it is
+     the only thing on the page that should be interactive. */
+  z-index: calc(var(--z-progress) + 10);
+  display: grid;
+  place-items: center;
+  padding: var(--gutter);
+  background: rgb(0 0 0 / 0.5);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.cdlg__panel {
+  inline-size: 100%;
+  max-inline-size: 30rem;
+  padding: var(--sp-6);
+  text-align: center;
+  background: var(--c-surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-3);
+  animation: cdlg-in var(--dur-2) var(--ease-spring);
+}
+
+@keyframes cdlg-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+.cdlg__title {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-h4);
+  font-weight: 800;
+  color: var(--c-ink);
+}
+
+.cdlg__text {
+  margin: 0 0 var(--sp-2);
+  line-height: var(--lh-body);
+  color: var(--c-body);
+}
+
+.cdlg__note {
+  margin: 0 0 var(--sp-5);
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
+}
+
+.cdlg__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-3);
+}
+
+/* Under 560px both buttons go full width and stack, submit first — the same
+   reasoning as .paper__actions. */
+@media (max-width: 559px) {
+  .cdlg__actions {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cdlg__panel {
+    animation: none;
+  }
+}
+
 /* ========================================================== answer key ===== */
 .answer-key {
   max-width: 860px;
@@ -468,6 +1271,7 @@
   display: flex;
   align-items: baseline;
   justify-content: center;
+  flex-wrap: wrap;
   gap: var(--sp-2);
   margin-block-end: var(--sp-6);
   padding: var(--sp-5);
@@ -492,6 +1296,19 @@
 }
 
 .ak-score__label {
+  color: var(--c-muted);
+}
+
+/* The auto + manual breakdown, printed only once every essay on the paper has
+   been marked. Takes the whole second line rather than sitting inline: a
+   student who was shown 8/10 an hour ago and now sees 13/15 needs the two
+   numbers that changed it, and burying them beside the denominator reads as
+   part of the fraction. `flex-basis: 100%` on a wrapping flex row is the line
+   break, so the markup stays one flat container. */
+.ak-score__split {
+  flex-basis: 100%;
+  text-align: center;
+  font-size: var(--fs-sm);
   color: var(--c-muted);
 }
 
@@ -575,6 +1392,177 @@
   flex: none;
   font-size: var(--fs-xs);
   font-weight: 700;
+}
+
+/* ---------------------------------------------- essay question, key side --- */
+/* The "your essay answers are with the teacher" banner above the questions.
+   Full width of the key column, unlike listing.css's .notice which centres
+   itself in a narrow container for a standalone page message. */
+.ak-review {
+  max-width: none;
+  margin-block-end: var(--sp-5);
+}
+
+/* An essay question has no options and no machine-checkable key, so this
+   replaces .ak-opts entirely rather than sitting beside it. Deliberately NOT
+   .ak-opt--correct green: this is the teacher's model answer, not a mark on
+   what the student wrote, and colouring it as "correct" would read as
+   feedback the page has not actually given. */
+.ak-model {
+  margin-block-start: var(--sp-4);
+  padding: var(--sp-4);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  /* Reading-edge accent — the RIGHT in RTL, which border-left would get
+     backwards. */
+  border-inline-start: 3px solid var(--c-primary);
+  border-radius: var(--r-md);
+}
+
+.ak-model__title {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  color: var(--c-muted);
+}
+
+/* white-space: pre-wrap so a model answer typed with line breaks keeps them —
+   it is stored verbatim from a textarea. overflow-wrap for a pasted formula
+   or URL long enough to widen the card. */
+.ak-model__text {
+  margin: 0;
+  line-height: var(--lh-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* No model answer was written. Said plainly, because the alternative is a
+   blank space where the options would be — which reads as a broken question
+   rather than one that is marked by hand. */
+.ak-model__none {
+  margin-block-start: var(--sp-4);
+  color: var(--c-muted);
+  font-size: var(--fs-sm);
+}
+
+/* ------------------------------------------- the student's own essay + mark --
+   Written answers have been captured on every submission since question types
+   existed, and until now no screen anywhere read them back: the student saw an
+   auto-score that silently excluded their essay and never learnt what it
+   earned. These three blocks are that half of the loop closing — what I wrote,
+   what it scored, what the teacher said about it.
+
+   Neutral surface, distinct from .ak-model's primary reading edge: this is the
+   student's own text, not the teacher's, and giving both the same accent makes
+   a card of two indistinguishable grey boxes. */
+.ak-mine {
+  margin-block-start: var(--sp-4);
+  padding: var(--sp-4);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+}
+
+.ak-mine__title {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  color: var(--c-muted);
+}
+
+/* pre-wrap so an answer typed with line breaks keeps them — it is stored
+   verbatim from a textarea. overflow-wrap for a pasted formula or a URL long
+   enough to widen the card past its container. */
+.ak-mine__text {
+  margin: 0;
+  line-height: var(--lh-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Left blank at submit time. Worth saying: a mark of 0 against an empty box is
+   explained by this line, and its absence would read as the page having lost
+   the answer. */
+.ak-mine__none {
+  margin-block-start: var(--sp-4);
+  color: var(--c-muted);
+  font-size: var(--fs-sm);
+}
+
+/* THE MARK. Colour is never the only signal — the fraction is printed beside
+   the label in every state, so the pass/fail reading survives greyscale,
+   colour blindness and a phone screen in the sun (WCAG 1.4.1). Both tints are
+   checked against their text at 4.5:1. */
+.ak-mark {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin: var(--sp-4) 0 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  background: var(--c-surface-alt);
+}
+
+.ak-mark__label {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.ak-mark__value {
+  font-size: var(--fs-h4);
+  font-weight: 800;
+  line-height: 1;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.ak-mark--pass {
+  color: var(--c-ok);
+  background: var(--c-ok-tint);
+  border-color: var(--c-ok);
+}
+
+.ak-mark--fail {
+  color: var(--c-bad);
+  background: var(--c-bad-tint);
+  border-color: var(--c-bad);
+}
+
+/* Not marked yet. Deliberately neither green nor red: an unmarked essay is not
+   a wrong one, and painting it red would tell the student they lost marks they
+   may still be awarded. */
+.ak-mark--wait {
+  color: var(--c-muted);
+  border-style: dashed;
+}
+
+/* The teacher's comment. Accent edge rather than the primary one .ak-model
+   uses, so a card carrying both a model answer and feedback reads as two
+   different voices. */
+.ak-note {
+  margin-block-start: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--c-accent-tint);
+  border: 1px solid var(--c-line);
+  border-inline-start: 3px solid var(--c-accent);
+  border-radius: var(--r-md);
+}
+
+.ak-note__title {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  color: var(--c-muted);
+}
+
+.ak-note__text {
+  margin: 0;
+  line-height: var(--lh-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* ===================================================== assessment list ===== */

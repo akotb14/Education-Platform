@@ -25,6 +25,7 @@ const signupScheme = new mongoose.Schema({
     type: String,
   },
   month:[Array],
+  
   admin: String,
 });
 module.exports = mongoose.model("auth", signupScheme);

@@ -2,6 +2,8 @@ const route = require("express").Router();
 const quiz = require("../models/quiz");
 const checkIsExamed = require("../models/degreeQuiz.js");
 const jwt = require("jsonwebtoken");
+const qt = require("../util/questionTypes");
+const gr = require("../util/grading");
 
 /* Where a student goes back to after reading the key, by paper type. */
 const BACK = {
@@ -22,6 +24,7 @@ route.get("/showAnswer/:id", async (req, res) => {
         data: null,
         score: null,
         outOf: null,
+        needsReview: false,
         kind: "quiz",
         backHref: "/",
         isLocked: false,
@@ -55,19 +58,43 @@ route.get("/showAnswer/:id", async (req, res) => {
         data: null,
         score: null,
         outOf: null,
+        needsReview: false,
         kind: modalQuiz.type || "quiz",
         backHref: BACK[modalQuiz.type] || "/",
         isLocked: true,
       });
     }
 
+    /* WHAT THE STUDENT IS TOLD ABOUT MARKING, derived rather than read off the
+       flag. `needsReview` is written once at submit time and is never cleared,
+       so a paper marked last week would still be telling the student their
+       essays are "بانتظار التصحيح". statusOf recomputes from the paper's
+       Explain questions against the marks actually stored on this attempt. */
+    const gstatus = gr.statusOf(modalQuiz, degree);
+
     res.render("showAnswer.ejs", {
       data: modalQuiz,
       score: degree.totalDegree,
-      outOf: Array.isArray(modalQuiz.quiz) ? modalQuiz.quiz.length : 0,
+      /* Out of the questions the machine actually marked, not every question
+         on the paper. A student who got all four auto-marked questions right
+         on a five-question paper with one essay would otherwise read 4/5 —
+         which looks like one wrong rather than one awaiting marking.
+
+         This stays the AUTO score and the AUTO denominator. The combined
+         total is derived in the view from `attempt` via totalsOf(), so the
+         two numbers are never conflated in storage or in transit. */
+      outOf: qt.autoGradableCount(modalQuiz),
+      needsReview: gstatus === gr.STATUS.PENDING || gstatus === gr.STATUS.PARTIAL,
+      /* The attempt itself, so the key can show each essay's awarded mark and
+         the teacher's feedback beside the question it belongs to. Nothing on
+         it is secret from its own owner: this handler has already proved the
+         record belongs to this student. */
+      attempt: degree,
       kind: modalQuiz.type || "quiz",
       backHref: BACK[modalQuiz.type] || "/",
       isLocked: false,
+      ...qt.viewLocals(),
+      ...gr.viewLocals(),
     });
   } catch (err) {
     console.log(err);

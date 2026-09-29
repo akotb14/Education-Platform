@@ -2,8 +2,9 @@ const express = require("express");
 const router = express.Router();
 const valid = require("../middlewares/signupMiddileware");
 const contro = require("../controllers/signup.contr");
-var csrf = require("csurf");
-const csrfProtect = csrf({ cookie: true });
+/* Configured in util/csrf.js rather than inline: the csrf({cookie:true}) default
+   left the secret cookie script-readable and non-Secure. */
+const csrfProtect = require("../util/csrf");
 const signModel = require("../models/user");
 const isAdmin = require("../util/aurth");
 const month = require("../models/month");
@@ -50,12 +51,14 @@ router.get("/addStudent", csrfProtect, isAdmin, async (req, res, next) => {
        nothing was set, so `check[0]` is undefined on a normal load — the old
        view tested the array itself, which is truthy even when empty. */
     const cardFlash = req.flash("errorCard");
+    const phoneFlash = req.flash("errorPhone");
     const okFlash = req.flash("addOk");
 
     res.render("admin/addStudent.ejs", {
       validator: req.flash("errorMsg"),
       csrfToken: req.csrfToken(),
       check: cardFlash.length ? cardFlash[0] : null,
+      checkPhone: phoneFlash.length ? phoneFlash[0] : null,
       flashOk: okFlash.length ? okFlash[0] : "",
       prefill: readPrefill(req.query),
     });
@@ -103,29 +106,51 @@ router.post(
    old form did not have — mounting `valid` without adding that field would
    have rejected every single submission. addStudent.ejs now renders it. */
 router.post("/addStudent", csrfProtect, isAdmin, valid, contro.postInfo);
-router.get("/editStudent/:id", csrfProtect, isAdmin, async (req, res) => {
+router.get("/editStudent/:id", csrfProtect, isAdmin, async (req, res, next) => {
   try {
     let id = req.params.id;
     const getStudent = await signModel.findOne({ _id: id });
     let selectMonth = await month.find({educetionlevel:getStudent['educetionlevel'],grade:getStudent['grade']});
     if (getStudent && selectMonth.length >= 0) {
+      const phoneFlash = req.flash("errorPhone");
       res.render("admin/editStudent.ejs", {
         csrfToken: req.csrfToken(),
         student: getStudent,
-        month: selectMonth
+        month: selectMonth,
+        checkPhone: phoneFlash.length ? phoneFlash[0] : null
       });
     } else {
       res.redirect("/student");
     }
   } catch (err) {
-    
-    console.log(err);
-    res.sendStatus(400);
+    /* Was `console.log(err); res.sendStatus(400)` — a bare 400 with no body for
+       every cause, including a lost database connection, and a stack trace only
+       in the server operator's terminal. A malformed :id is a CastError, which
+       the handler in app.js answers as 400 with a page; anything else is a real
+       fault and should be reported as one. */
+    return next(err);
   }
 });
 router.post("/editStudent/:id", csrfProtect, isAdmin, async (req, res, next) => {
   try {
     let id = req.params.id;
+
+    /* Same rule as on create, for the same reason: login resolves an account by
+       phoneNumber alone, so letting an edit move a number onto an account that
+       already has it leaves one of the two unable to sign in, silently. $ne on
+       _id so saving a student without touching their number is not a conflict
+       with themselves. See controllers/signup.contr.js. */
+    const phone = req.body.phoneNumber && String(req.body.phoneNumber).trim();
+    if (phone) {
+      const dupPhone = await signModel.findOne({
+        phoneNumber: phone,
+        _id: { $ne: id },
+      });
+      if (dupPhone) {
+        req.flash("errorPhone", { phoneNumber: phone });
+        return res.redirect("/editStudent/" + id);
+      }
+    }
 
     /* A checkbox group submits nothing when no box is ticked, one string when
        exactly one is, and an array when several are. `req.body.month` was

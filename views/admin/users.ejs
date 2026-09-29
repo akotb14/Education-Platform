@@ -33,6 +33,11 @@
      group     String active group filter ("" or "All" = none)
      q         String active free-text search
      limit     Number rows per page
+
+     Plus the shared filter locals from util/tableFilters.viewLocals():
+     f, GROUPS, GRADES, SUBJECTS, SORTS, GROUP_LABEL, GRADE_LABEL,
+     SUBJECT_LABEL, qs — spread in by the route and passed straight to
+     _table-toolbar.ejs.
    ====================================================================== */
 
 var rows =
@@ -42,45 +47,35 @@ var totalRows =
 var curPage = typeof page !== "undefined" && page ? Number(page) : 1;
 var numPages = typeof pages !== "undefined" && pages ? Number(pages) : 1;
 var perPage = typeof limit !== "undefined" && limit ? Number(limit) : 25;
-var curGroup = typeof group !== "undefined" && group ? String(group) : "";
-var curQ = typeof q !== "undefined" && q ? String(q) : "";
 
 if (!isFinite(curPage) || curPage < 1) curPage = 1;
 if (!isFinite(numPages) || numPages < 1) numPages = 1;
 
-var SUBJECTS = { biology: "الأحياء", geology: "الجيولوجيا" };
-var GRADES = {
-  "1st": "الصف الأول",
-  "2nd": "الصف الثاني",
-  "3rd": "الصف الثالث"
-};
+/* The four filter values, from the route. Kept in one object so the pager and
+   the empty state read the same state the toolbar renders. The fallback keeps
+   this view renderable on its own — e.g. from an offline probe — and mirrors
+   what tableFilters.parse({}) returns. */
+var FS =
+  typeof f !== "undefined" && f && typeof f === "object"
+    ? f
+    : { group: "", grade: "", level: "", sort: "", q: "", active: false, touched: false };
 
-/* Value stays English — it is what the DB stores and what the route filters
-   on. Only the label is translated. */
-var GROUPS = [
-  { value: "OnlineStudent", label: "أونلاين" },
-  { value: "Saturday", label: "السبت" },
-  { value: "Sunday", label: "الأحد" },
-  { value: "Monday", label: "الاثنين" },
-  { value: "Tuesday", label: "الثلاثاء" },
-  { value: "Wednesday", label: "الأربعاء" },
-  { value: "Thursday", label: "الخميس" },
-  { value: "Friday", label: "الجمعة" }
-];
+/* The label maps used to be redeclared here, in showStudDegree.ejs and in
+   onlinestudent.ejs — three copies of the same eight weekday labels. They
+   arrive as locals now; these aliases keep the table markup below unchanged.
+   GRADES/SUBJECTS are the LABEL maps, not the {value,label} arrays the
+   toolbar iterates — the arrays reach the partial under their own names. */
+var GRADE_MAP = typeof GRADE_LABEL !== "undefined" && GRADE_LABEL ? GRADE_LABEL : {};
+var SUBJECT_MAP = typeof SUBJECT_LABEL !== "undefined" && SUBJECT_LABEL ? SUBJECT_LABEL : {};
+var GROUP_MAP = typeof GROUP_LABEL !== "undefined" && GROUP_LABEL ? GROUP_LABEL : {};
 
-var GROUP_LABEL = {};
-for (var gi = 0; gi < GROUPS.length; gi++) {
-  GROUP_LABEL[GROUPS[gi].value] = GROUPS[gi].label;
-}
-
-/* Page links must carry the current filter and search, or paging silently
-   resets them. encodeURIComponent on both — a group value or a search term
-   containing & would otherwise inject a query parameter. */
+/* Page links must carry every filter AND the sort, or paging silently resets
+   them. `qs` is tableFilters.toQuery, handed over as a local because EJS
+   cannot require; it encodes each value, so a search term containing & cannot
+   inject a parameter. */
 var pageHref = function (p) {
-  var qs = "?page=" + p;
-  if (curGroup && curGroup !== "All") qs += "&group=" + encodeURIComponent(curGroup);
-  if (curQ) qs += "&q=" + encodeURIComponent(curQ);
-  return "/student" + qs;
+  var build = typeof qs === "function" ? qs : null;
+  return "/student" + (build ? build(FS, { page: p }) : "?page=" + p);
 };
 
 var firstRow = totalRows ? (curPage - 1) * perPage + 1 : 0;
@@ -89,68 +84,25 @@ var lastRow = Math.min(curPage * perPage, totalRows);
 var ICON = {
   users:
     "M16 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 1a3 3 0 1 0-3-3 3 3 0 0 0 3 3Zm0 2c-2.7 0-6 1.3-6 4v3h8v-3a5 5 0 0 1 1.5-3.4A10 10 0 0 0 8 14Zm8 0c-3 0-8 1.5-8 4.5V21h16v-2.5c0-3-5-4.5-8-4.5Z",
-  search:
-    "M10 2a8 8 0 1 0 4.9 14.3l5.4 5.4 1.4-1.4-5.4-5.4A8 8 0 0 0 10 2Zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Z",
   edit: "M4 17.2 16.4 4.8l2.8 2.8L6.8 20H4v-2.8Zm14.9-11-1.3-1.3 1.4-1.4 1.3 1.3-1.4 1.4Z",
   trash: "M8 2h8v2h5v2H3V4h5V2Zm-3 6h14l-1 14H6L5 8Zm4 2v10h2V10H9Zm4 0v10h2V10h-2Z",
   plus: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"
 };
 %>
 
-<form class="toolbar" method="get" action="/student">
-  <div class="toolbar__field">
-    <label class="label" for="q">بحث بالاسم أو رقم الهاتف أو الكارت</label>
-    <input
-      class="input"
-      type="search"
-      id="q"
-      name="q"
-      value="<%= curQ %>"
-      placeholder="اكتب اسمًا أو رقمًا…"
-      autocomplete="off"
-    />
-  </div>
-
-  <div class="toolbar__field">
-    <label class="label" for="group">المجموعة</label>
-    <select class="select" id="group" name="group">
-      <%
-      /* The active value is marked selected on the real option, so the closed
-         dropdown shows the filter that is actually applied. */
-      var isAll = !curGroup || curGroup === "All";
-      %>
-      <option value="All"<%= isAll ? " selected" : "" %>>كل المجموعات</option>
-      <% for (var g = 0; g < GROUPS.length; g++) { %>
-      <option
-        value="<%= GROUPS[g].value %>"
-        <%= curGroup === GROUPS[g].value ? " selected" : "" %>
-      >
-        <%= GROUPS[g].label %>
-      </option>
-      <% } %>
-    </select>
-  </div>
-
-  <div class="toolbar__actions">
-    <button class="btn" type="submit">
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="<%= ICON.search %>" />
-      </svg>
-      بحث
-    </button>
-
-    <% if (curQ || (curGroup && curGroup !== "All")) { %>
-    <a class="btn btn--ghost" href="/student">إلغاء التصفية</a>
-    <% } %>
-
-    <a class="btn btn--ghost" href="/addStudent">
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="<%= ICON.plus %>" />
-      </svg>
-      إضافة طالب
-    </a>
-  </div>
-</form>
+<%
+/* One shared toolbar: search + group + subject + grade + name sort + Excel
+   export. `extra` carries this page's own "إضافة طالب" action into the same
+   button row, so it does not need a second flex container. */
+%>
+<%- include("_table-toolbar", {
+  action: "/student",
+  search: true,
+  extra:
+    '<a class="btn btn--ghost" href="/addStudent">' +
+    '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+    '<path d="' + ICON.plus + '" /></svg>إضافة طالب</a>'
+}) %>
 
 <section class="panel">
   <div class="panel__head">
@@ -170,9 +122,9 @@ var ICON = {
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="<%= ICON.users %>" />
     </svg>
-    <% if (curQ || (curGroup && curGroup !== "All")) { %>
-    <p class="empty-state__title">لا طالب يطابق هذا البحث</p>
-    <p>جرّب اسمًا آخر أو <a href="/student">أعد ضبط التصفية</a>.</p>
+    <% if (FS.active) { %>
+    <p class="empty-state__title">لا طالب يطابق هذه التصفية</p>
+    <p>جرّب تصفية أخرى أو <a href="/student">أعد ضبط التصفية</a>.</p>
     <% } else { %>
     <p class="empty-state__title">لا يوجد طلاب مسجلون بعد</p>
     <p>أضف أول طالب من صفحة «إضافة طالب».</p>
@@ -202,18 +154,18 @@ var ICON = {
 
           <td>
             <% if (st.group) { %>
-            <span class="badge"><%= GROUP_LABEL[st.group] || st.group %></span>
+            <span class="badge"><%= GROUP_MAP[st.group] || st.group %></span>
             <% } else { %>—<% } %>
           </td>
 
           <td>
             <% if (st.grade) { %>
-            <span class="tag"><%= GRADES[st.grade] || st.grade %></span>
+            <span class="tag"><%= GRADE_MAP[st.grade] || st.grade %></span>
             <% } else { %>—<% } %>
           </td>
 
           <td>
-            <%= st.educetionlevel ? (SUBJECTS[st.educetionlevel] || st.educetionlevel) : "—" %>
+            <%= st.educetionlevel ? (SUBJECT_MAP[st.educetionlevel] || st.educetionlevel) : "—" %>
           </td>
 
           <td>

@@ -224,6 +224,15 @@
       list.appendChild(frag);
       renumber();
 
+      /* The clone arrives with the server's default type applied. It still
+         has to be initialised: without this its option add/remove buttons
+         keep whatever disabled state the template was rendered with. */
+      if (card) {
+        applyType(card);
+        var boxes = card.querySelectorAll("[data-qchoices]");
+        for (var b = 0; b < boxes.length; b++) renumberOptions(boxes[b]);
+      }
+
       if (card) {
         var first = card.querySelector("textarea, input[type='text']");
         if (first) first.focus();
@@ -282,16 +291,194 @@
     list.addEventListener("change", function (e) {
       var radio = e.target;
       if (!radio || radio.type !== "radio" || !radio.name) return;
-      if (radio.name.indexOf("_correct") === -1) return;
+      /* _tf as well as _correct: True/False marks its answer the same way. */
+      if (radio.name.indexOf("_correct") === -1 && radio.name.indexOf("_tf") === -1) return;
 
-      var card = radio.closest("[data-qcard]");
-      if (!card) return;
+      /* Scoped to the group the radio belongs to, not the whole card — a card
+         holds both the multiple-choice rows and the True/False rows, and
+         clearing across both would strip the highlight from the group the
+         admin is not looking at. */
+      var group = radio.closest("[data-qfields]") || radio.closest("[data-qcard]");
+      if (!group) return;
 
-      var rows = card.querySelectorAll("[data-qchoice]");
+      var rows = group.querySelectorAll("[data-qchoice]");
       for (var i = 0; i < rows.length; i++) {
         var r = rows[i].querySelector("input[type='radio']");
         rows[i].classList.toggle("qchoice--correct", !!(r && r.checked));
       }
+    });
+
+    /* ------------------------------------------------ question types --- */
+    /* Each card holds one <fieldset data-qfields="…"> per type, of which
+       exactly one is active. Rendered correct by the server, so this only
+       ever flips an already-consistent state — which is what makes the form
+       work with JavaScript off.
+
+       DISABLED, NOT JUST HIDDEN. The choice boxes and the answer radio carry
+       `required`, and a required control that is display:none makes the
+       browser refuse to submit on an element it cannot focus: Chrome logs
+       "An invalid form control with name='…' is not focusable" and the save
+       button does nothing at all, with no message anywhere. disabled exempts
+       a control from validation AND drops it from the submission, so the
+       server never sees fields belonging to a type the admin switched away
+       from either. */
+    function cardType(card) {
+      var sel = card.querySelector("[data-qtype]");
+      return sel ? sel.value : "mcq";
+    }
+
+    function applyType(card) {
+      var type = cardType(card);
+
+      var groups = card.querySelectorAll("[data-qfields]");
+      for (var i = 0; i < groups.length; i++) {
+        var on = groups[i].getAttribute("data-qfields") === type;
+        groups[i].hidden = !on;
+        /* Setting it on the <fieldset> cascades to every control inside,
+           which is why the groups are fieldsets and not divs. */
+        groups[i].disabled = !on;
+      }
+
+      var hints = card.querySelectorAll("[data-qhint]");
+      for (var h = 0; h < hints.length; h++) {
+        hints[h].hidden = hints[h].getAttribute("data-qhint") !== type;
+      }
+    }
+
+    list.addEventListener("change", function (e) {
+      var sel = e.target;
+      if (!sel || !sel.hasAttribute || !sel.hasAttribute("data-qtype")) return;
+      var card = sel.closest("[data-qcard]");
+      if (card) applyType(card);
+    });
+
+    /* ---------------------------------------------- option repeater --- */
+    function optionRows(box) {
+      return box.querySelectorAll("[data-qchoice]");
+    }
+
+    /* Renumber option rows CONTIGUOUSLY, unlike question blocks.
+       Question blocks deliberately leave gaps — their name indices only have
+       to be unique, and renumbering them would mean rewriting every field in
+       the form on every removal. Option rows are different: the server reads
+       them in ascending index order, so a freed index reused by a new row
+       would place that row first in the saved paper while it sits last on
+       screen. The list is at most six inputs, so rewriting it is cheap, and
+       keeping index == position means the order the admin sees is the order
+       the student gets. */
+    function renumberOptions(box) {
+      var rows = optionRows(box);
+      var min = parseInt(box.getAttribute("data-qmin"), 10) || 2;
+      var max = parseInt(box.getAttribute("data-qmax"), 10) || 6;
+
+      /* Read the question index off the type select: its name is exactly
+         q_<i>_type, so the capture cannot be thrown off by an index that is
+         itself underscore-laden (the <template> renders i as "__I__"). */
+      var card = box.closest("[data-qcard]");
+      var typeSel = card ? card.querySelector("[data-qtype]") : null;
+      var m = /^q_(.+)_type$/.exec(typeSel ? typeSel.getAttribute("name") || "" : "");
+      var qIdx = m ? m[1] : null;
+
+      for (var i = 0; i < rows.length; i++) {
+        var text = rows[i].querySelector(".qchoice__text");
+        var radio = rows[i].querySelector(".qchoice__radio");
+
+        if (qIdx !== null && text) {
+          text.name = "q_" + qIdx + "_a" + i;
+          text.id = "q_" + qIdx + "_a" + i;
+        }
+        if (qIdx !== null && radio) {
+          /* value is the answer key. Rewriting it while leaving `checked`
+             alone is what keeps the marked option marked as rows shift. */
+          radio.value = String(i);
+          radio.id = "q_" + qIdx + "_c" + i;
+          radio.setAttribute("aria-label", "الاختيار " + (i + 1) + " هو الإجابة الصحيحة");
+        }
+
+        var label = rows[i].querySelector("[data-qchoiceno]");
+        if (label) label.textContent = String(i + 1);
+
+        var lbl = rows[i].querySelector(".qchoice__label");
+        if (lbl && text) lbl.setAttribute("for", text.id);
+
+        var rm = rows[i].querySelector("[data-qchoiceremove]");
+        if (rm) rm.disabled = rows.length <= min;
+      }
+
+      var add = box.querySelector("[data-qchoiceadd]");
+      if (add) add.disabled = rows.length >= max;
+    }
+
+    list.addEventListener("click", function (e) {
+      var add = e.target.closest("[data-qchoiceadd]");
+      if (add) {
+        if (add.disabled) return;
+        var box = add.closest("[data-qchoices]");
+        var card = add.closest("[data-qcard]");
+        if (!box || !card) return;
+
+        var rows = optionRows(box);
+        var max = parseInt(box.getAttribute("data-qmax"), 10) || 6;
+        if (rows.length >= max) return;
+
+        /* Clone the last row rather than build markup here: the same reason
+           the question template is server-rendered — a hand-written copy
+           drifts from the real one the first time a field changes. Naming is
+           left to renumberOptions, which owns index == position. */
+        var last = rows[rows.length - 1];
+        if (!last) return;
+        var row = last.cloneNode(true);
+
+        var text = row.querySelector(".qchoice__text");
+        if (text) text.value = "";
+        var radio = row.querySelector(".qchoice__radio");
+        if (radio) radio.checked = false;
+        row.classList.remove("qchoice--correct");
+
+        last.parentNode.insertBefore(row, add);
+        renumberOptions(box);
+        if (text) text.focus();
+        announce("تمت إضافة اختيار. عدد الاختيارات الآن " + optionRows(box).length + ".");
+        return;
+      }
+
+      var rm = e.target.closest("[data-qchoiceremove]");
+      if (!rm || rm.disabled) return;
+
+      var rbox = rm.closest("[data-qchoices]");
+      var rrow = rm.closest("[data-qchoice]");
+      if (!rbox || !rrow) return;
+
+      var min = parseInt(rbox.getAttribute("data-qmin"), 10) || 2;
+      if (optionRows(rbox).length <= min) return;
+
+      var val = rrow.querySelector(".qchoice__text");
+      if (val && val.value.trim() !== "" && !window.confirm("حذف هذا الاختيار؟")) return;
+
+      /* Removing the row holding the answer key leaves q_<i>_correct with no
+         checked radio at all. That is the right outcome — silently promoting
+         another option to "correct" would publish an answer key nobody
+         chose — and the field is `required`, so the browser stops the admin
+         at the question rather than letting it save unmarked. */
+      var wasCorrect = rrow.querySelector(".qchoice__radio");
+      var lost = !!(wasCorrect && wasCorrect.checked);
+
+      var siblings = optionRows(rbox);
+      var at = Array.prototype.indexOf.call(siblings, rrow);
+      var next = siblings[at + 1] || siblings[at - 1];
+
+      rrow.parentNode.removeChild(rrow);
+      renumberOptions(rbox);
+
+      if (next) {
+        var focusTarget = next.querySelector(".qchoice__text");
+        if (focusTarget) focusTarget.focus();
+      }
+      announce(
+        lost
+          ? "تم حذف الاختيار الصحيح. علّم الإجابة الصحيحة من جديد."
+          : "تم حذف الاختيار. عدد الاختيارات الآن " + optionRows(rbox).length + "."
+      );
     });
 
     /* Two identical choices make the paper ambiguous: the answer key is stored
@@ -302,6 +489,11 @@
       form.addEventListener("submit", function (e) {
         var all = cards();
         for (var i = 0; i < all.length; i++) {
+          /* MULTIPLE CHOICE ONLY. Every True/False question shares the same
+             two option strings by design, so an unscoped check would fire on
+             the second one the admin adds and block a perfectly valid form. */
+          if (cardType(all[i]) !== "mcq") continue;
+
           var boxes = all[i].querySelectorAll(".qchoice__text");
           var seen = {};
           for (var j = 0; j < boxes.length; j++) {
@@ -312,7 +504,7 @@
               announce("");
               window.alert(
                 "السؤال " + (i + 1) + ": الاختيار «" + v + "» مكرر. " +
-                "اجعل الاختيارات الأربعة مختلفة."
+                "اجعل كل اختيار مختلفًا عن غيره."
               );
               boxes[j].focus();
               return;
@@ -324,6 +516,18 @@
     }
 
     renumber();
+
+    /* Bring every server-rendered card into a known state — including the
+       option add/remove buttons, whose disabled state depends on how many
+       rows came back from the server. */
+    (function initCards() {
+      var all = cards();
+      for (var i = 0; i < all.length; i++) {
+        applyType(all[i]);
+        var boxes = all[i].querySelectorAll("[data-qchoices]");
+        for (var b = 0; b < boxes.length; b++) renumberOptions(boxes[b]);
+      }
+    })();
   })();
 
   /* ------------------------------------------------------------- reveal --- */

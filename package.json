@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "afplay": "^1.0.4",
     "ajv": "^8.11.0",
     "ajv-errors": "^3.0.0",
     "ajv-formats": "^2.1.1",
@@ -21,6 +22,7 @@
     "csurf": "^1.2.2",
     "dotenv": "^16.0.1",
     "ejs": "^3.1.8",
+    "exceljs": "^4.4.0",
     "express": "^4.18.1",
     "express-htaccess-middleware": "^0.1.0",
     "express-rate-limit": "^6.6.0",

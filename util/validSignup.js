@@ -33,6 +33,19 @@ const schema ={
         },
         password:{
             type:"string",
+            /* There was no minimum at all, so "1" was a valid password for a
+               student account — and there is no self-service password change in
+               this application, so whatever an admin types on the create form is
+               that account's password indefinitely.
+
+               The message is attached to the subschema rather than to the
+               root-level errorMessage.properties block below: `password` is
+               declared inside allOf[0].properties, and ajv-errors matches a
+               root-level properties entry against the root schema's own
+               properties, not against one nested under allOf. A message put
+               there would silently never appear. */
+            minLength: 8,
+            errorMessage: "كلمة السر يجب أن تكون 8 أحرف على الأقل.",
         }
         ,confirmPassword:{
           const:{$data:'1/password'}

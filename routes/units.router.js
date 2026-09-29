@@ -9,39 +9,17 @@ const { uploadPdf: upload } = require("../middlewares/upload");
 const isAdmin = require("../util/aurth");
 const quizModel = require("../models/quiz");
 const degreeModel = require("../models/degreeQuiz");
-const csrf = require("csurf");
-
-const csrfProtect = csrf({ cookie: true });
+/* Was `csrf({ cookie: true })` here, one of eight identical copies. That default
+   stores the CSRF secret in a cookie with no httpOnly, no sameSite and no
+   secure — see util/csrf.js, which now owns the configuration. */
+const csrfProtect = require("../util/csrf");
 
 router.get("/:edu/:grd", contro.getData);
 
-/* upload.single() runs before csrfProtect so multer has parsed the multipart
-   body and the _csrf field is visible to csurf. */
 router.post("/lesson", isAdmin, upload.single("pdf"), csrfProtect, contro.addlesson);
 router.get("/lesson", csrfProtect, isAdmin, contro.getlesson);
 
-/* Deleting a unit row.
 
-   WAS A GET LINK with no CSRF and no confirmation, so a prefetch, a crawler or
-   a mis-click deleted a lesson. It also had three logic bugs:
-
-     · `for (i of f.units)` and `for (j of f.units)` — no declaration, so both
-       are implicit globals shared across concurrent requests.
-     · `f` was read with no null check, so an already-deleted id threw a
-       TypeError that surfaced as a bare 404.
-     · IT LEFT THE ATTACHED PAPERS ORPHANED. A unit row carries quizId and
-       homeId; pulling the row dropped the only reference to them, so the quiz
-       and homework documents stayed in the collection forever, invisible to
-       every admin page but still counted on the dashboard and still returned to
-       students by /openHomeWork, which queries by subject+grade and never looks
-       at the unit tree. Both are deleted here now, along with any attempts
-       recorded against them.
-
-   The month-cleanup at the end is kept: a month row exists only to unlock a
-   month for students, so the last unit leaving a month takes the month with it.
-   The old count started at -1 and compared `== 0`, which is correct only by
-   accident — it counted the row being deleted as well, since `f` was read
-   before the $pull. Rewritten to count what remains. */
 router.post("/removelesson/:i/:id", csrfProtect, isAdmin, async (req, res, next) => {
   try {
     const doc = await Unit.getModel().findOne({ _id: req.params.i });
@@ -151,5 +129,17 @@ router.get('/content/:educetionlevel/:grade/:month/:id', isMonth , async (req,re
 })
 
 
-router.get("/:edu/:grade/:month/:unit", contro.getContent);
+/* isMonth was missing here, and this is the route that serves a unit's actual
+   content — the same material /content/:educetionlevel/:grade/:month/:id two
+   routes above is gated on. Only the app-level isLogin applied, so ANY signed-in
+   student could read any grade's, any month's units by typing the URL:
+   /biology/1st/أكتوبر/unit-one returned 200 to a 2nd-grade student who owns no
+   months at all. Confirmed against the running server before this change.
+
+   The guard is the existing one, unchanged: it re-reads the role and the month
+   list from the database, lets admins through, and answers 404 — not 403 — for a
+   month the student does not own, so the response does not reveal whether that
+   month exists. `:month` is already this route's third parameter, which is the
+   name isMonth reads. */
+router.get("/:edu/:grade/:month/:unit", isMonth, contro.getContent);
 module.exports = {router,upload};

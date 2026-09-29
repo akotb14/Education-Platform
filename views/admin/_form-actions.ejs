@@ -1,0 +1,83 @@
+<%
+/* =========================================================================
+   THE ACTIONS ROW — save, cancel, and nothing else.
+
+   ONE NAME PER ACTION. The same save operation was labelled three ways across
+   the dashboard: "حفظ" on addStudent, "حفظ التعديلات" on editStudent and
+   "حفظ" with a badge on the paper edit form. All three are the same action and
+   now read the same. Creating a thing is genuinely a different action from
+   saving edits to it, so lesson.ejs keeps "إضافة الدرس", passed in as `save`.
+
+   The cancel affordance is a LINK, not a button: it navigates, it does not
+   submit — and a <button> inside a form defaults to type="submit", which is
+   how a "cancel" ends up saving the form.
+
+   USAGE — one `act` object, for the reason documented at length in _field.ejs:
+   an include's scope is built from the PARENT's locals with the include data
+   layered on top, so a flat option this partial reads but the caller did not
+   pass resolves to the parent's local of that name. One nested name can
+   collide instead of six.
+
+     include("_form-actions", { act: { cancel: "/student" } })
+
+   act OPTIONS
+     save    button text                          (default "حفظ التغييرات")
+     icon    "save" | "plus" | "" for none                  (default "save")
+     cancel  href for إلغاء; the link is omitted when not passed
+     badge   number for the question builder's [data-qcount] pill, which sits
+             INSIDE the save button: the count belongs on the control the admin
+             is about to press — "حفظ" with a 3 on it says three questions are
+             going along with the details. 0 is a real value; omit the key
+             entirely on every form that is not the builder.
+     note    one line of small type beside the buttons, for saying what pressing
+             save actually does — "the whole paper is saved at once". It lives in
+             the actions row rather than at the bottom of the form because that
+             is where the admin is looking when the question matters, and it is
+             in the partial rather than after the include so its wording,
+             placement and wrapping are decided once for every form that needs
+             one. Escaped: this is copy, not markup.
+     attrs   raw extra attributes for the submit button
+
+   `act` is read behind a `typeof` guard, like every other shared local: EJS
+   compiles with `with(locals)`, so naming a key the caller did not pass throws.
+   ====================================================================== */
+
+var A = typeof act !== "undefined" && act && typeof act === "object" ? act : {};
+
+var aSave = A.save ? String(A.save) : "حفظ التغييرات";
+var aIcon = A.icon === undefined ? "save" : String(A.icon || "");
+var aCancel = A.cancel ? String(A.cancel) : "";
+var aNote = A.note ? String(A.note) : "";
+var aAttrs = A.attrs ? String(A.attrs) : "";
+
+/* undefined/null/"" rather than falsiness: a builder holding zero questions
+   must still render the badge, and `badge: 0` is exactly that case. */
+var aBadge = A.badge === undefined || A.badge === null || A.badge === "" ? null : String(A.badge);
+
+var PATHS = {
+  save: "M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4Zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm3-10H7V5h8v4Z",
+  plus: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"
+};
+-%>
+<div class="form-actions">
+  <button class="btn" type="submit"<%- aAttrs %>>
+<% if (aIcon && PATHS[aIcon]) { -%>
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="<%= PATHS[aIcon] %>" /></svg>
+<% } -%>
+    <%= aSave %>
+<%
+    /* admin.js fills every [data-qcount] in the form as questions are added
+       and removed, so the hook and its class are part of the contract with the
+       script, not decoration. */
+-%>
+<% if (aBadge !== null) { -%>
+    <span class="btn__badge num" dir="ltr" data-qcount><%= aBadge %></span>
+<% } -%>
+  </button>
+<% if (aCancel) { -%>
+  <a class="btn btn--ghost" href="<%= aCancel %>">إلغاء</a>
+<% } -%>
+<% if (aNote) { -%>
+  <p class="field-hint"><%= aNote %></p>
+<% } -%>
+</div>

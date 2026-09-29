@@ -6,11 +6,13 @@ const unit = require("../models/unit");
 const isAdmin = require("../util/aurth");
 const jwt = require("jsonwebtoken");
 const degreeModel = require("../models/degreeQuiz");
+const qt = require("../util/questionTypes");
+const at = require("../util/attemptTime");
 const { updateOne } = require("../models/user");
 const { uploadImage: upload } = require("../middlewares/upload");
-const csrf = require("csurf");
-
-const csrfProtect = csrf({ cookie: true });
+/* Configured in util/csrf.js rather than inline: the csrf({cookie:true}) default
+   left the secret cookie script-readable and non-Secure. */
+const csrfProtect = require("../util/csrf");
 route.get("/openHomeWork", async (req, res) => {
   try {
     if (!req.cookies.student) {
@@ -205,19 +207,14 @@ route.post("/homework/:name", async (req, res) => {
 route.post("/homeworkApp/:nameQuiz", async (req, res) => {
   try {
     let name = req.params.nameQuiz;
-    let count = 0;
     let student = jwt.verify(req.cookies.student, process.env.SecretPassword);
     const data = await model.findOne({
       _id: name,
     });
-    /* `i` was assigned without a declaration here, making it an implicit
-       global — and this file's loops are async, so two concurrent submissions
-       shared the counter. */
-    for (let i = 0; i < data["quiz"].length; i++) {
-      if (req.body[`answer${i}`] == data["quiz"][i].correctAnswer) {
-        count++;
-      }
-    }
+    /* One shared grader — see the comment in util/questionTypes.js and the
+       quiz.router.js copy. `i` was an undeclared implicit global here too. */
+    const graded = qt.gradeSubmission(data, req.body);
+    const count = graded.count;
     const checkCount = await degreeModel.findOne({
       quiz: data._id,
       student: student.studentCard,
@@ -225,6 +222,14 @@ route.post("/homeworkApp/:nameQuiz", async (req, res) => {
       type: "homework",
     });
     if (checkCount && checkCount.totalDegree == null) {
+      /* Homework is untimed, so this attempt has no `deadline` and lateFields
+         returns {} — the behaviour here is exactly what it has always been.
+         The call is made anyway so all three graders enforce the deadline the
+         same way: if homework ever gains a due time, it is already honoured
+         here rather than being the one grader that forgot. See
+         util/attemptTime.js. */
+      const late = at.lateFields(checkCount);
+
       let up = await degreeModel.findOneAndUpdate(
         {
           quiz: data._id,
@@ -232,7 +237,18 @@ route.post("/homeworkApp/:nameQuiz", async (req, res) => {
           isCheck: "1",
           type: "homework",
         },
-        { totalDegree: count }
+        {
+          totalDegree: count,
+          writtenAnswers: graded.written,
+          ...late,
+          /* See the quiz.router.js copy: the student's own choices, the
+             hand-in time, and a needsReview that means "this paper has essays
+             on it" so blank ones still reach the marking queue. */
+          answers: graded.answers,
+          submittedAt: new Date(),
+          needsReview: graded.written.length > 0 || late.late === true,
+        }
+
       );
     }
     return res.redirect("/openHomeWork");
@@ -283,27 +299,33 @@ route.get("/homeworkApp/:nameQuiz", async (req, res) => {
       totalSeconds: null,
       alreadyTaken: attempt.totalDegree != null,
       backHref: "/openHomeWork",
+      /* The question-type whitelist, so the paper renders the right input per
+         question. EJS cannot require(). */
+      ...qt.viewLocals(),
     });
   } catch (err) {
     console.log(err);
     res.sendStatus(404);
   }
 });
-/* Edit a homework: its details and a batch of new questions, in one form.
+/* THE SETTINGS PAGE — the homework's own fields: name, description, due date,
+   which lesson it belongs to. Nothing about its questions; those live at
+   /questionsOfHomework/:id below.
 
-   Was two handlers' worth of logic in one if/else that did either the
-   details OR a single question, never both — see controllers/quiz.contro.js.
-   upload.any() because the image field names are generated per question
-   (q_0_image, q_1_image …) and .single() rejects the second file; it must
-   run before csrfProtect, since the token arrives in the multipart body and
-   csurf cannot see it until multer has parsed the request. */
+   These used to be one form that did the details AND a batch of new questions,
+   which meant a rename opened a page led by a question builder. See the block
+   comment in controllers/quiz.contro.js for the split.
+
+   No upload.any() on the POST any more: with the question builder gone the form
+   has no file input, so it posts as ordinary urlencoded and app.js's body parser
+   is enough — which also lets csrfProtect run first, in its usual place, rather
+   than having to wait for multer to find the token in a multipart body. */
 route.get("/editHomework/:id", csrfProtect, isAdmin, contro.editPaperGet("homework"));
 
 route.post(
   "/editHomework/:id",
-  isAdmin,
-  upload.any(),
   csrfProtect,
+  isAdmin,
   contro.editPaperPost("homework")
 );
 /* POST + CSRF, and the same cascade fix as /removeQuiz.
@@ -333,6 +355,49 @@ route.post("/removeHomework/:id", csrfProtect, isAdmin, async (req, res, next) =
     next(err);
   }
 });
+/* ----------------------------------------------------------------------
+   MANAGE QUESTIONS. The other half of the edit split: everything here works on
+   the homework's question list and nothing here can touch its settings.
+
+   :i is the paper and :id is the question — the order
+   /removeQuestionOfHomework has always used, kept so all four read alike.
+
+   upload.any() BEFORE csrfProtect on the two routes that carry a question: the
+   image field names are generated per question (q_0_image, q_1_image …) so
+   .single() would reject the second file, and the CSRF token arrives inside the
+   multipart body, where csurf cannot see it until multer has parsed the request.
+   The move and remove routes carry no file and take csrfProtect first.
+   ---------------------------------------------------------------------- */
+route.get(
+  "/questionsOfHomework/:id",
+  csrfProtect,
+  isAdmin,
+  contro.questionsGet("homework")
+);
+
+route.post(
+  "/addQuestionsOfHomework/:id",
+  isAdmin,
+  upload.any(),
+  csrfProtect,
+  contro.addQuestionsPost("homework")
+);
+
+route.post(
+  "/editQuestionOfHomework/:i/:id",
+  isAdmin,
+  upload.any(),
+  csrfProtect,
+  contro.editQuestionPost("homework")
+);
+
+route.post(
+  "/moveQuestionOfHomework/:i/:id",
+  csrfProtect,
+  isAdmin,
+  contro.moveQuestionPost("homework")
+);
+
 /* POST + CSRF. As a GET link this deleted a question on any prefetch,
    crawler visit or mis-click, with no confirmation and no token. */
 route.post(

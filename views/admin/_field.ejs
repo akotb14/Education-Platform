@@ -1,0 +1,306 @@
+<%
+/* =========================================================================
+   ONE FORM FIELD — the shared field component for every dashboard form.
+
+   WHY THIS FILE EXISTS. Every admin form was written by hand, one page at a
+   time, so each page invented its own spelling of the same field. Before this
+   partial: `fullName` was half-width on addStudent and full-width on
+   editStudent; the same three time inputs carried `input--ltr dir="ltr"` on
+   the add form and none of it on the edit form; the empty option was worded
+   five different ways ("— اختر —", "اختر المادة…", "— بدون —",
+   "— غير محددة —", "— غير محدد —"); two conflicting sets of grade labels
+   rendered one page apart; and one page emitted `aria-describedby=""`, which
+   references an element that cannot exist. None of that was a decision. It is
+   what happens when the same markup is retyped eleven times.
+
+   USAGE — one `fld` object, passed as the include's data:
+
+     include("_field", { fld: { type: "select", name: "grade", id: "grade",
+                                label: "الصف", list: "grades",
+                                value: pre.grade, required: true } })
+
+   (Written with EJS delimiters at the call site. They are left out of this
+   comment on purpose: EJS tokenises the file by delimiter, so a literal
+   opening tag inside a scriptlet comment is read as a real tag and the compile
+   fails with "Could not find matching close tag".)
+
+   WHY THE OPTIONS ARE NESTED IN ONE OBJECT rather than passed flat. EJS builds
+   an include's scope from the PARENT's locals with the include data layered on
+   top, so a flat option this partial reads but the call site did not pass
+   resolves to the parent's local of that name. That is not hypothetical:
+   lesson.ejs has `var rows` for its table, and a flat `rows` option would make
+   every field on that page inherit it. Nesting means exactly one name — `fld`
+   — can collide, and nothing in the app is called that.
+
+   WHAT IT OWNS, i.e. the things that kept drifting:
+     · the markup shape — .form-field › .label › control › .field-hint
+     · ONE neutral-option wording, "اختر <الحقل>…", built from the label
+     · ONE set of option presets, so the grade labels cannot fork again
+     · `input--ltr dir="ltr" inputmode` on every type whose value is a Latin
+       run — the exact drift described above
+     · `aria-describedby` pointing at the error, else the hint, else OMITTED
+
+   WHAT IT DOES NOT OWN. Nothing here changes what the server receives: `name`,
+   `id`, `value`, `required`, `pattern`, `accept`, `maxlength` and every raw
+   attribute pass straight through. _question-block.ejs and _table-toolbar.ejs
+   deliberately do NOT route through this partial — the first is bound to
+   admin.js by exact class names and its `__I__` index placeholder, the second
+   has a working local helper — so both keep their markup and had only their
+   classes corrected.
+
+   fld OPTIONS
+     type      text|tel|url|number|password|datetime-local|time|file|
+               textarea|select                                  (default text)
+     name      submitted key. id defaults to it.
+     label     Arabic label text. Also builds the neutral option.
+     value     current value. For select, matched against each option's value.
+     required  adds `required` AND the <abbr> star.
+     hint      explanatory line under the control.
+     hintHtml  a hint containing markup, emitted unescaped. Exists for one
+               reason: a hint that quotes a Latin run needs
+               `<span dir="ltr">01:30</span>` around it or the bidi algorithm
+               reorders it mid-sentence. AUTHOR-WRITTEN LITERALS ONLY — never a
+               value from the request or the database. Use `hint` for anything
+               that is not markup you typed yourself.
+     error     string, or an Ajv-style { message }. Adds --error and
+               aria-invalid, and replaces the hint.
+     width     sm|md|lg — caps the CONTROL (see "field widths" in admin.css).
+     full      spans both columns of a .form-grid.
+     list      "levels"|"grades"|"groups", an array of { value, label }, or an
+               array of { label, items:[…] } to emit <optgroup>s. An option may
+               also carry `disabled: true`.
+     neutral   override the empty-option text; false to omit it entirely.
+     unknown   false to suppress the "stored value not in the list" option.
+     ltr       force the Latin-run treatment on or off.
+     tall      textarea only — the taller variant, for a model answer.
+     rows      textarea only                                       (default 3)
+     attrs     raw extra attributes, e.g. ' data-qtype'.
+     cls       extra classes on the .form-field wrapper.
+     Passed through when present: placeholder, maxlength, min, max, step,
+     pattern, accept, autocomplete, inputmode.
+
+   `fld` itself is read behind a `typeof` guard: EJS compiles with
+   `with(locals)`, so naming a key the caller did not pass is a ReferenceError
+   — and a render error bypasses the route's try/catch, because Express hands
+   it to its own error handler.
+   ====================================================================== */
+
+var F = typeof fld !== "undefined" && fld && typeof fld === "object" ? fld : {};
+
+var fType = F.type ? String(F.type) : "text";
+var fName = F.name ? String(F.name) : "";
+var fId = F.id ? String(F.id) : fName;
+var fLabel = F.label ? String(F.label) : "";
+var fReq = F.required ? true : false;
+var fHint = F.hint ? String(F.hint) : "";
+/* Kept separate from fHint all the way to the two emit branches at the bottom,
+   so there is exactly one place in this file that writes unescaped text and it
+   is visible at the point of use. */
+var fHintHtml = F.hintHtml ? String(F.hintHtml) : "";
+var fWidth = F.width ? String(F.width) : "";
+var fTall = F.tall ? true : false;
+var fAttrs = F.attrs ? String(F.attrs) : "";
+var fRows = F.rows ? String(F.rows) : "3";
+
+/* An Ajv error object, a plain string, or nothing. */
+var fErr = "";
+if (F.error) fErr = typeof F.error === "string" ? F.error : String(F.error.message || "");
+
+var fValue = F.value === undefined || F.value === null ? "" : String(F.value);
+
+/* ------------------------------------------------------ option presets ----
+   The DB stores English values and the page shows Arabic labels, so these
+   pairs are a contract with the schema and must not be edited casually. The
+   grade labels are the long form — "الصف الأول", not "الأول". Both spellings
+   were in use, on pages that render one after the other. */
+var PRESETS = {
+  levels: [
+    { value: "biology", label: "الأحياء" },
+    { value: "geology", label: "الجيولوجيا" }
+  ],
+  grades: [
+    { value: "1st", label: "الصف الأول" },
+    { value: "2nd", label: "الصف الثاني" },
+    { value: "3rd", label: "الصف الثالث" }
+  ],
+  groups: [
+    { value: "OnlineStudent", label: "أونلاين" },
+    { value: "Saturday", label: "السبت" },
+    { value: "Sunday", label: "الأحد" },
+    { value: "Monday", label: "الاثنين" },
+    { value: "Tuesday", label: "الثلاثاء" },
+    { value: "Wednesday", label: "الأربعاء" },
+    { value: "Thursday", label: "الخميس" },
+    { value: "Friday", label: "الجمعة" }
+  ]
+};
+
+var fList = [];
+if (typeof F.list === "string") fList = PRESETS[F.list] || [];
+else if (Array.isArray(F.list)) fList = F.list;
+
+/* ------------------------------------------------- the unknown-value option --
+   A stored value that is not in the list has to be shown, or the select renders
+   with nothing matching, the browser silently selects the first option, and the
+   next save writes THAT over the real value. The admin never sees it happen.
+
+   editStudent.ejs had this escape hatch hand-written for `educetionlevel` and
+   `group` and not for `grade` — the reason being that the level list is the one
+   that demonstrably forked (three other admin views offer Secondary/Preparatory
+   for the same field, values the student-facing queries can never match), so it
+   got the guard and the field next to it did not. The exposure is identical for
+   every select on the dashboard, so it is handled here for all of them, once.
+
+   The label says why the value looks odd rather than just echoing it: an admin
+   who reads "Secondary (قيمة غير معروفة)" knows to pick a real value; one who
+   reads "Secondary" assumes it is a normal choice.
+
+   `unknown: false` opts out, for a select whose value legitimately lives
+   outside its option list. */
+var fSelected = false;
+if (fType === "select" && fValue !== "" && F.unknown !== false) {
+  for (var ki = 0; ki < fList.length; ki++) {
+    var kop = fList[ki];
+    if (!kop) continue;
+    if (Array.isArray(kop.items)) {
+      for (var kj = 0; kj < kop.items.length; kj++) {
+        if (kop.items[kj] && String(kop.items[kj].value) === fValue) fSelected = true;
+      }
+    } else if (String(kop.value) === fValue) {
+      fSelected = true;
+    }
+  }
+  if (!fSelected) {
+    /* A copy — fList may be one of the shared PRESETS arrays, and pushing onto
+       that would leak this record's stray value into every later field on the
+       page. The presets are module-level state for the duration of a render. */
+    fList = fList.concat([{ value: fValue, label: fValue + " (قيمة غير معروفة)" }]);
+  }
+}
+
+/* ONE neutral wording, built from the label: "المادة" gives "اختر المادة…".
+   `neutral: false` drops the empty option — for a select that always holds a
+   value, like the student/admin role. */
+var fNeutral = fLabel ? "اختر " + fLabel + "…" : "اختر…";
+var fHasNeutral = true;
+if (F.neutral === false) fHasNeutral = false;
+else if (F.neutral) fNeutral = String(F.neutral);
+
+/* --------------------------------------------------------- Latin runs -----
+   A URL, a phone number, a mark, a datetime-local value: all Latin digit or
+   ASCII runs, which the bidi algorithm reorders inside an RTL line — a URL
+   renders with its slashes in the wrong places and "00:30" can read "30:00".
+   Centralising it here is the whole point: this is precisely what one form
+   remembered and the next forgot. */
+var LTR_TYPES = {
+  url: "url", tel: "tel", number: "numeric", email: "email",
+  password: "", "datetime-local": "", time: ""
+};
+var fLtr = Object.prototype.hasOwnProperty.call(LTR_TYPES, fType);
+if (F.ltr !== undefined) fLtr = F.ltr ? true : false;
+
+var fInputmode = F.inputmode ? String(F.inputmode) : fLtr ? LTR_TYPES[fType] || "" : "";
+
+/* --------------------------------------------------- assembled classes ----
+   A <select> wears .select and never .input: the two are sized identically,
+   but only .select carries the arrow inset and cursor: pointer, so a
+   <select class="input"> is a dropdown that does not look clickable. */
+var ctlClass = fType === "select" ? "select" : "input";
+if (fLtr) ctlClass += " input--ltr";
+if (fType === "textarea" && fTall) ctlClass += " input--tall";
+
+var wrapClass = "form-field";
+if (fWidth === "sm" || fWidth === "md" || fWidth === "lg") wrapClass += " form-field--" + fWidth;
+if (F.full) wrapClass += " form-grid__full";
+if (fErr) wrapClass += " form-field--error";
+if (F.cls) wrapClass += " " + String(F.cls);
+
+/* aria-describedby names the error when there is one, else the hint, and is
+   OMITTED when there is neither. Conditional on fId as well: the description
+   is referenced BY id, so with no id there is nothing to point at and the
+   attribute would name an element that cannot exist — the same invalid
+   reference this partial exists to remove, reintroduced from the other end. */
+var describedBy = !fId ? "" : fErr ? fId + "-error" : fHint || fHintHtml ? fId + "-hint" : "";
+
+/* Only the attributes the caller actually passed. `min: 0` and `maxlength: 0`
+   are real values, so the test is against undefined and empty string rather
+   than falsiness — the obvious `||` here silently drops every min="0". */
+var PASS = ["placeholder", "maxlength", "min", "max", "step", "pattern", "accept", "autocomplete"];
+var passed = [];
+for (var _p = 0; _p < PASS.length; _p++) {
+  var _v = F[PASS[_p]];
+  if (_v === undefined || _v === null || _v === "") continue;
+  passed.push(
+    " " + PASS[_p] + '="' +
+    String(_v).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;") +
+    '"'
+  );
+}
+var passStr = passed.join("");
+
+/* Built as strings so the tag below stays on one line and renders as one line.
+   The trim-newline closing delimiter is used throughout for the same reason:
+   without newline trimming a field emits its markup buried in twenty blank
+   lines, and View Source is where the next person debugs a form. (That
+   delimiter is described rather than typed here for the reason given at the top
+   of this file — EJS tokenises the whole file by delimiter before it parses
+   anything, so a literal one inside a comment ends the scriptlet mid-sentence
+   and the rest of the comment compiles as template text.) */
+var idAttr = fId ? ' id="' + fId + '"' : "";
+var forAttr = fId ? ' for="' + fId + '"' : "";
+var reqAttr = fReq ? " required" : "";
+var descAttr = describedBy ? ' aria-describedby="' + describedBy + '"' : "";
+var invAttr = fErr ? ' aria-invalid="true"' : "";
+-%>
+<div class="<%= wrapClass %>">
+  <label class="label"<%- forAttr %>><%= fLabel %><% if (fReq) { %> <abbr title="مطلوب">*</abbr><% } %></label>
+<% if (fType === "select") { -%>
+  <select class="<%= ctlClass %>"<%- idAttr %> name="<%= fName %>"<%- reqAttr %><%- descAttr %><%- invAttr %><%- fAttrs %>>
+<% if (fHasNeutral) { -%>
+    <option value=""><%= fNeutral %></option>
+<% } -%>
+<% for (var oi = 0; oi < fList.length; oi++) { var op = fList[oi]; -%>
+<% if (op && Array.isArray(op.items)) { -%>
+    <optgroup label="<%= op.label %>">
+<% for (var oj = 0; oj < op.items.length; oj++) { var sub = op.items[oj]; -%>
+      <option value="<%= sub.value %>"<%- sub.disabled ? " disabled" : "" %><%- String(sub.value) === fValue ? " selected" : "" %>><%= sub.label %></option>
+<% } -%>
+    </optgroup>
+<% } else if (op) { -%>
+    <option value="<%= op.value %>"<%- op.disabled ? " disabled" : "" %><%- String(op.value) === fValue ? " selected" : "" %>><%= op.label %></option>
+<% } -%>
+<% } -%>
+  </select>
+<% } else if (fType === "textarea") { -%>
+<%
+  /* rows= stays on the element as the no-CSS floor; textarea.input sets the
+     real min-block-size and resize: vertical. A bare <textarea> gets the
+     browser default resize: both, which lets it be dragged wider than its
+     RTL container. */
+-%>
+  <textarea class="<%= ctlClass %>"<%- idAttr %> name="<%= fName %>" rows="<%= fRows %>"<%- reqAttr %><%- descAttr %><%- invAttr %><%- passStr %><%- fAttrs %>><%= fValue %></textarea>
+<% } else { -%>
+<%
+  /* A password is never echoed back into an input, even on a failed
+     submission — the value would sit in the HTML, in the browser's cache and
+     in any proxy log between here and the admin. Retyping it is the point. A
+     file input has no settable value at all: assigning one is a security error
+     in every browser, since a page could otherwise post a file of its
+     choosing from the admin's disk. */
+-%>
+  <input class="<%= ctlClass %>" type="<%= fType %>"<%- idAttr %> name="<%= fName %>"<% if (fType !== "password" && fType !== "file") { %> value="<%= fValue %>"<% } %><%- fLtr ? ' dir="ltr"' : "" %><%- fInputmode ? ' inputmode="' + fInputmode + '"' : "" %><%- reqAttr %><%- descAttr %><%- invAttr %><%- passStr %><%- fAttrs %> />
+<% } -%>
+<%
+  /* The error REPLACES the hint rather than stacking under it: two lines of
+     small type, one grey and one red, under a single control is how a form
+     starts reading as a wall of warnings. The error is the more urgent of the
+     two and the hint returns as soon as the field is fixed. */
+-%>
+<% if (fErr) { -%>
+  <p class="field-hint field-hint--error"<%- fId ? ' id="' + fId + '-error"' : "" %>><%= fErr %></p>
+<% } else if (fHint) { -%>
+  <p class="field-hint"<%- fId ? ' id="' + fId + '-hint"' : "" %>><%= fHint %></p>
+<% } else if (fHintHtml) { -%>
+  <p class="field-hint"<%- fId ? ' id="' + fId + '-hint"' : "" %>><%- fHintHtml %></p>
+<% } -%>
+</div>

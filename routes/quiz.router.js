@@ -7,11 +7,13 @@ const isAdmin = require("../util/aurth");
 
 const jwt = require("jsonwebtoken");
 const degreeModel = require("../models/degreeQuiz");
+const qt = require("../util/questionTypes");
+const at = require("../util/attemptTime");
 const router = require("./login.router");
 const { uploadImage: upload } = require("../middlewares/upload");
-const csrf = require("csurf");
-
-const csrfProtect = csrf({ cookie: true });
+/* Configured in util/csrf.js rather than inline: the csrf({cookie:true}) default
+   left the secret cookie script-readable and non-Secure. */
+const csrfProtect = require("../util/csrf");
 /* Where a quiz's exit / back link goes: the month's lesson list it belongs to.
    Falls back to the homepage when the paper has no placement. */
 const quizBackHref = (paper) =>
@@ -68,20 +70,12 @@ route.get('/quiz',(req,res)=>{
   res.status(404).send("no quiz is added now")
 })
 
-/* quizTime is stored as "HH:MM" — a single budget for the whole paper, not per
-   question. Returns the allowance in seconds, or null when it is unusable.
-
-   The old code built this with dateQ.setHours(getHours() + hh, getMinutes() +
-   mm) and subtracted two Date objects, which is a very long way round and
-   silently produced NaN whenever quizTime was empty or malformed. */
-const allowanceSeconds = (quizTime) => {
-  if (!quizTime) return null;
-  const parts = String(quizTime).split(":");
-  const hh = parseInt(parts[0], 10);
-  const mm = parseInt(parts[1], 10);
-  const secs = (isNaN(hh) ? 0 : hh) * 3600 + (isNaN(mm) ? 0 : mm) * 60;
-  return secs > 0 ? secs : null;
-};
+/* The "HH:MM" → seconds parse, and the remaining-time and late-submission
+   arithmetic, all now live in util/attemptTime.js. This file and
+   controllers/quiz.contro.js each carried their own byte-identical copy of the
+   parse, which is how the three graders in this app drifted apart in the first
+   place. */
+const allowanceSeconds = at.allowanceSeconds;
 
 route.post("/quiz/:name", async (req, res) => {
   try {
@@ -150,18 +144,20 @@ route.post("/quizApp/:nameQuiz", async (req, res) => {
   let data = null;
   try {
     let name = req.params.nameQuiz;
-    let count = 0;
     let student = jwt.verify(req.cookies.student, process.env.SecretPassword);
     data = await model.findOne({
       _id: name,
     });
-    /* `i` was assigned with no declaration, making it an implicit global shared
-       by every concurrent submission. */
-    for (let i = 0; i < data["quiz"].length; i++) {
-      if (req.body[`answer${i}`] == data["quiz"][i].correctAnswer) {
-        count++;
-      }
-    }
+    /* One shared grader, in util/questionTypes.js. This loop existed in three
+       near-identical copies — here, homework.router.js and postQuizApp — which
+       agreed only because nobody had touched one of them. `i` was also assigned
+       with no declaration, making it an implicit global shared by every
+       concurrent submission.
+
+       Explain answers arrive under `explain<i>` and come back in `written`;
+       they are neither credited nor counted against. */
+    const graded = qt.gradeSubmission(data, req.body);
+    const count = graded.count;
     const checkCount = await degreeModel.findOne({
       quiz: data._id,
       student: student.studentCard,
@@ -169,6 +165,15 @@ route.post("/quizApp/:nameQuiz", async (req, res) => {
       type: "quiz",
     });
     if (checkCount && checkCount.totalDegree == null) {
+      /* THE SERVER'S OWN VIEW OF THE CLOCK. The countdown on the paper was
+         always anchored to this attempt's stored `deadline`, so refreshing or
+         re-opening the page could never buy time — but nothing here compared
+         the deadline to the moment the answers actually arrived, so a student
+         who cleared the interval in the console submitted whenever they liked
+         and it was graded as on time. See util/attemptTime.js for why a late
+         submission is recorded and flagged rather than refused. */
+      const late = at.lateFields(checkCount);
+
       await degreeModel.findOneAndUpdate(
         {
           quiz: data._id,
@@ -176,7 +181,24 @@ route.post("/quizApp/:nameQuiz", async (req, res) => {
           isCheck: "1",
           type: "quiz",
         },
-        { totalDegree: count }
+        {
+          totalDegree: count,
+          writtenAnswers: graded.written,
+          ...late,
+          /* What the student picked, per auto-graded question. Only the total
+             used to survive grading, so no screen could show them which
+             question they got wrong. */
+          answers: graded.answers,
+          /* The hand-in time. _id.getTimestamp() is the time the attempt was
+             STARTED, which on a timed paper is up to quizTime earlier. */
+          submittedAt: new Date(),
+          /* "This paper has essays on it", not "this student wrote
+             something": a blank essay still needs a teacher to award it zero,
+             and `written` now carries a row for every explain question.
+             A late hand-in is a second reason for the same queue. */
+          needsReview: graded.written.length > 0 || late.late === true,
+        }
+
       );
     }
     return res.redirect(quizBackHref(data));
@@ -220,15 +242,11 @@ route.get("/quizApp/:nameQuiz", async (req, res) => {
     /* Remaining time for THIS student, from their own deadline. Clamped at 0 so
        a reopened expired attempt renders a stopped clock and auto-submits
        rather than a negative countdown. Attempts created before the deadline
-       field existed have none, and fall back to untimed. */
+       field existed have none, and fall back to untimed. Both this and the
+       submission-time check above read the same module, so the clock the
+       student sees and the clock the grader enforces cannot disagree. */
     const total = allowanceSeconds(data.quizTime);
-    let secondsLeft = null;
-    if (attempt.deadline) {
-      secondsLeft = Math.max(
-        0,
-        Math.floor((attempt.deadline.getTime() - Date.now()) / 1000)
-      );
-    }
+    const secondsLeft = at.secondsLeft(attempt);
 
     res.render("quiz-paper.ejs", {
       kind: "quiz",
@@ -237,6 +255,9 @@ route.get("/quizApp/:nameQuiz", async (req, res) => {
       totalSeconds: total,
       alreadyTaken: attempt.totalDegree != null,
       backHref: quizBackHref(data),
+      /* The question-type whitelist, so the paper renders the right input per
+         question. EJS cannot require(). */
+      ...qt.viewLocals(),
     });
   } catch (err) {
     console.log(err);
@@ -244,15 +265,16 @@ route.get("/quizApp/:nameQuiz", async (req, res) => {
   }
 });
 
+/* THE SETTINGS PAGE — the quiz's own fields, and nothing about its questions.
+   Its questions live at /questionsOfQuiz/:id below.
+
+   No upload.any() on the POST any more. The settings form has no file input, so
+   it posts as ordinary urlencoded and app.js's body parser is enough — which
+   also means csrfProtect can run in its usual place, first, instead of having to
+   wait for multer to find the token in a multipart body. */
 route.get("/editQuiz/:id", csrfProtect, isAdmin, contro.editPaperGet("quiz"));
 
-route.post(
-  "/editQuiz/:id",
-  isAdmin,
-  upload.any(),
-  csrfProtect,
-  contro.editPaperPost("quiz")
-);
+route.post("/editQuiz/:id", csrfProtect, isAdmin, contro.editPaperPost("quiz"));
 /* POST + CSRF, and the cascade the old handler got wrong.
 
    Three bugs it had: it was a GET link, so a prefetch or crawler could delete a
@@ -285,6 +307,50 @@ route.post("/removeQuiz/:id", csrfProtect, isAdmin, async (req, res, next) => {
     next(err);
   }
 });
+/* ----------------------------------------------------------------------
+   MANAGE QUESTIONS. The other half of the edit split: everything here works on
+   the quiz's question list and nothing here can touch its settings.
+
+   :i is the paper and :id is the question on the three per-question routes —
+   the order /removeQuestionOfQuiz has always used, kept so the existing route
+   keeps its shape and the four read alike.
+
+   upload.any() BEFORE csrfProtect on the two routes that carry a question:
+   their forms are multipart (a question can have an image), the token arrives
+   inside the multipart body, and csurf cannot see it until multer has parsed
+   the request. Move it after and every save fails with an invalid token.
+   The move and remove routes carry no file, so they take csrfProtect first.
+   ---------------------------------------------------------------------- */
+route.get(
+  "/questionsOfQuiz/:id",
+  csrfProtect,
+  isAdmin,
+  contro.questionsGet("quiz")
+);
+
+route.post(
+  "/addQuestionsOfQuiz/:id",
+  isAdmin,
+  upload.any(),
+  csrfProtect,
+  contro.addQuestionsPost("quiz")
+);
+
+route.post(
+  "/editQuestionOfQuiz/:i/:id",
+  isAdmin,
+  upload.any(),
+  csrfProtect,
+  contro.editQuestionPost("quiz")
+);
+
+route.post(
+  "/moveQuestionOfQuiz/:i/:id",
+  csrfProtect,
+  isAdmin,
+  contro.moveQuestionPost("quiz")
+);
+
 route.post(
   "/removeQuestionOfQuiz/:i/:id",
   csrfProtect,

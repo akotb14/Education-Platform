@@ -1,483 +1,493 @@
-
-
-<!DOCTYPE html>
-
-<html lang="en">
-
-  <head>
-
-    <meta charset="UTF-8" />
-
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-    <link rel="stylesheet" href="../admin/dashboard/assets/css/style.css" />
-
-    <link rel="stylesheet" href="../admin/dashboard/assets/css/users.css" />
-
-    <title>Uesrs</title>
-
-  </head>
-
-  <body>
-
-    <!-- =============== Navigation ================ -->
-
-    <div class="container">
-
-      <div class="navigation">
-
-        <ul>
-
-          <li>
-
-            <a href="#" class="nav">
-
-              <span class="icon">
-
-                <img src="/logo2.png" alt="" />
-
-              </span>
-
-              <span class="title">The Quen Platform</span>
-
-            </a>
-
-          </li>
-
-
-
-          <li>
-
-            <a href="/" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="home-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">go to home</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/dashboard" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="home-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">Dashboard</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/student" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="people-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">Students</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/admin/studentOnline" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="people-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">studentOnline</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/lesson" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="videocam-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">Lessons</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/admin/homework" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="newspaper-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">Homework</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/showStudentsDegree/homework" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="newspaper-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">show Homework Degree</span>
-
-            </a>
-
-          </li>
-
-
-
-          <li>
-
-            <a href="/admin/quiz" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="clipboard-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">Quiz</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/showStudentsDegree/quiz" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="newspaper-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">show Quiz Degree</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/admin/exam" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="book-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">Exam</span>
-
-            </a>
-
-          </li>
-
-          <li>
-
-            <a href="/showStudentsDegree/exam" class="nav">
-
-              <span class="icon">
-
-                <ion-icon name="newspaper-outline"></ion-icon>
-
-              </span>
-
-              <span class="title">show Exam Degree</span>
-
-            </a>
-
-          </li>
-
-          
-
-          <li>
-
-            <a href="/sign" class="nav">
-
-              <button class="signout nav">
-
-                <span class="icon">
-
-                  <ion-icon name="log-in-outline"></ion-icon>
-
-                </span>
-
-                <span class="title">Add Student</span>
-
-              </button>
-
-            </a>
-
-          </li>
-
-          
-
-        </ul>
-
-      </div>
-
-
-
-      <div class="main">
-
-        <div class="topbar">
-
-          <div class="toggle">
-
-            <ion-icon name="menu-outline"></ion-icon>
-
-          </div>
-
-
-
-          <div class="users">
-
-            <form method="get" action="" >
-
-              <select
-
-              name="group"
-
-              id="group"
-
-              style="margin: 0 5px;  width: 130px; height: 25px;"
-
-            >
-
-              <option
-
-                name="group"
-
-                value="All"
-
-                class="placeholder"
-
-                disabled
-
-                selected
-
-                hidden
-
+<%
+/* Nav key and page title depend on :type, so both are computed before the
+   shell include rather than passed as literals. */
+var TYPE = typeof type !== "undefined" && type ? String(type) : "quiz";
+var KINDS = {
+  quiz: { label: "الكويزات", one: "الكويز", key: "deg-quiz" },
+  homework: { label: "الواجبات", one: "الواجب", key: "deg-homework" },
+  exam: { label: "الامتحانات", one: "الامتحان", key: "deg-exam" }
+};
+var K = KINDS[TYPE] || KINDS.quiz;
+/* Snap TYPE back to a whitelisted key after the lookup. TYPE is not only a
+   label — it goes into this page's own form action and into every delete
+   action, so an unrecognised :type would otherwise be echoed into URLs the
+   page tells the browser to submit to. The route 404s on an unknown type
+   already; this keeps the view self-consistent on its own. */
+if (!KINDS[TYPE]) TYPE = "quiz";
+%>
+<%- include("_head", { active: K.key, title: "درجات " + K.label }) %>
+<%
+/* =========================================================================
+   STUDENT DEGREES — one table of attempts for /showStudentsDegree/:type.
+
+   WHAT THE OLD PAGE DID
+     · Loaded the retired dashboard theme with "../admin/dashboard/assets/…".
+       That relative path only resolves from a ONE-segment URL; this page is
+       served at /showStudentsDegree/quiz, where the browser resolved it to
+       /showStudentsDegree/admin/dashboard/… — a 404. Both stylesheets and the
+       menu script failed on every load, so the page rendered as an unstyled
+       table with a dead sidebar toggle. It was never actually seen styled.
+     · Repeated the 13-item sidebar inline, in English, inside <html lang="en">
+       on an Arabic RTL platform, and titled every page "Uesrs".
+     · Put the whole page INSIDE .topbar — the filter form, the heading and the
+       table were all nested in the header bar.
+     · Delete was a GET link: /removestudentDegree/:type/:id behind an <a>. A
+       crawler, a prefetch or a mis-click wiped a student's result, with no
+       confirmation, no CSRF and — on that route alone — no isAdmin either, so
+       it was reachable by anyone who knew the URL. It is a POST form now and
+       the route is guarded; see routes/exam.router.js.
+     · Built "Grade&Specialization" by concatenating `grade + " &"`. A bare & in
+       text is an invalid entity start, and an attempt whose student had no
+       grade printed the literal string "undefined".
+     · The group <select> had no <label>, was sized with inline width/height,
+       and its `disabled selected hidden` placeholder had value="All" — so
+       after filtering by Monday the control snapped back to "Select Group"
+       and nothing on the page said which filter was live.
+     · Printed `totalDegree/quiz.length` unconditionally. totalDegree is null
+       for an attempt that was opened but never submitted, and EJS renders null
+       as the empty string, so those rows read "/10" — indistinguishable from a
+       genuine zero. They are marked "لم يُسلّم" here.
+
+   HOW THE FILTERS BEHAVE
+   All four controls filter the STUDENT, not the paper — group, subject and
+   grade are attributes of the person, and that is what an admin is narrowing
+   by when they ask "how did Monday's group do". The route resolves matching
+   student ids first and queries `student: {$in: ids}`, so `data` now contains
+   exactly the matching attempts. It previously used populate({match}), which
+   does NOT drop a non-matching row — it nulls .student on it — so the null
+   skip below is kept as a guard for attempts whose student was deleted.
+
+   LOCALS
+     data       Array   attempts, each populated with .quiz and .student
+     type       String  "quiz" | "homework" | "exam"
+     group      String  active group filter, "" for none               (optional)
+     csrfToken  String  required by the delete forms                   (optional)
+     f, GROUPS, GRADES, SUBJECTS, SORTS, GROUP_LABEL, GRADE_LABEL,
+     SUBJECT_LABEL, qs — the shared filter locals from
+     util/tableFilters.viewLocals(), passed straight to _table-toolbar.ejs
+     autoGradableCount  Function  from util/questionTypes.viewLocals();
+                        the score denominator                      (optional)
+     totalsOf, GSTATUS, GSTATUS_LABELS  from util/grading.viewLocals();
+                        the manual marks, the combined total and the derived
+                        marking status                             (optional)
+   ====================================================================== */
+
+var attempts = typeof data !== "undefined" && Array.isArray(data) ? data : [];
+var token = typeof csrfToken !== "undefined" && csrfToken ? csrfToken : "";
+
+var FS =
+  typeof f !== "undefined" && f && typeof f === "object"
+    ? f
+    : { group: "", grade: "", level: "", sort: "", q: "", active: false, touched: false };
+
+/* Label maps arrive as locals now — they used to be redeclared identically
+   here, in users.ejs and in onlinestudent.ejs. */
+var GRADE_MAP = typeof GRADE_LABEL !== "undefined" && GRADE_LABEL ? GRADE_LABEL : {};
+var SUBJECT_MAP = typeof SUBJECT_LABEL !== "undefined" && SUBJECT_LABEL ? SUBJECT_LABEL : {};
+var GROUP_MAP = typeof GROUP_LABEL !== "undefined" && GROUP_LABEL ? GROUP_LABEL : {};
+
+/* One pass, so the markup below is plain iteration and the summary counts
+   agree with the rows actually rendered.
+
+   Two skips, for different reasons:
+     student == null  the group filter excluded them (see the note above)
+     quiz    == null  the paper was deleted. The delete routes clean these up
+                      now, so only rows predating that fix reach here — but
+                      rendering one would throw on quiz.nameQuiz. */
+/* The "out of". Comes from the shared helper so essay questions — which no
+   machine marks — are not counted in the denominator: a student who got all
+   four auto-marked questions right on a five-question paper with one essay
+   would otherwise read 4/5, i.e. one wrong rather than one unmarked.
+
+   Guarded, like every other local: this view is also rendered by routes that
+   pre-date the helper. The fallback is the old expression exactly, and for a
+   paper with no essay questions the two agree anyway. */
+var COUNT_GRADABLE =
+  typeof autoGradableCount !== "undefined" && typeof autoGradableCount === "function"
+    ? autoGradableCount
+    : function (p) { return p && Array.isArray(p.quiz) ? p.quiz.length : 0; };
+
+/* The marking status and the combined total, from the one module that defines
+   them. Same guard-and-fallback shape as COUNT_GRADABLE above: this view is
+   also reached by callers that pre-date the helper, and the fallback is the
+   old behaviour exactly — no manual marks, nothing to mark, so the score cell
+   renders the auto-score alone as it always did. */
+var ST =
+  typeof GSTATUS !== "undefined" && GSTATUS
+    ? GSTATUS
+    : { NONE: "none", PENDING: "pending", PARTIAL: "partial", GRADED: "graded" };
+var ST_LABEL =
+  typeof GSTATUS_LABELS !== "undefined" && GSTATUS_LABELS
+    ? GSTATUS_LABELS
+    : { none: "لا يحتاج تصحيحًا", pending: "بانتظار التصحيح", partial: "تصحيح جزئي", graded: "تم التصحيح" };
+var TOTALS =
+  typeof totalsOf === "function"
+    ? totalsOf
+    : function () {
+        return { manual: 0, manualOutOf: 0, final: null, finalOutOf: 0, pending: 0, status: "none" };
+      };
+
+var BADGE = {};
+BADGE[ST.NONE] = "";
+BADGE[ST.PENDING] = " badge--pending";
+BADGE[ST.PARTIAL] = " badge--partial";
+BADGE[ST.GRADED] = " badge--graded";
+
+var rows = [];
+var orphans = 0;
+for (var a = 0; a < attempts.length; a++) {
+  var it = attempts[a];
+  if (!it) continue;
+  if (!it.student) continue;
+  if (!it.quiz) { orphans++; continue; }
+
+  var totalQ = COUNT_GRADABLE(it.quiz);
+  var t = TOTALS(it.quiz, it);
+  /* totalDegree is a String in the schema and null until the paper is handed
+     in. `== null` catches both null and undefined; a submitted zero is 0 and
+     must NOT be treated as unsubmitted. */
+  var submitted = it.totalDegree != null && it.totalDegree !== "";
+  var score = submitted ? Number(it.totalDegree) : null;
+  if (score != null && !isFinite(score)) score = null;
+
+  var pct = null;
+  if (score != null && totalQ > 0) {
+    pct = Math.round((score / totalQ) * 100);
+  }
+
+  rows.push({
+    id: it._id,
+    name: it.student.fullName || "—",
+    card: it.student.cardNumber || "",
+    group: it.student.group || "",
+    sGrade: it.student.grade || "",
+    sSubject: it.student.educetionlevel || "",
+    paper: it.quiz.nameQuiz || "—",
+    pGrade: it.quiz.grade || "",
+    pSubject: it.quiz.educetionlevel || "",
+    /* The row's own type, not the URL's. They always agree today; using the
+       row's keeps the delete action correct if that ever stops being true. */
+    pType: it.quiz.type || TYPE,
+    submitted: submitted,
+    score: score,
+    totalQ: totalQ,
+    pct: pct,
+    /* The manual half, and the two combined. `final` is derived — the database
+       stores the auto-score and the manual marks separately and never their
+       sum — so a row can never show a total that disagrees with its parts. */
+    manual: t.manual,
+    manualOutOf: t.manualOutOf,
+    final: t.final,
+    finalOutOf: t.finalOutOf,
+    pending: t.pending,
+    /* DERIVED, not the `needsReview` flag. That flag is written once at submit
+       time and never cleared, so a row marked last week would still be
+       claiming "بانتظار التصحيح" today. statusOf/totalsOf recompute from the
+       paper's essay questions against the stored marks, so this cell is
+       current no matter what the flag says. */
+    status: t.status
+  });
+}
+
+var submittedRows = rows.filter(function (r) { return r.submitted; });
+var scored = submittedRows.filter(function (r) { return r.pct != null; });
+var avg = scored.length
+  ? Math.round(scored.reduce(function (s, r) { return s + r.pct; }, 0) / scored.length)
+  : null;
+
+var filtering = !!FS.active;
+
+/* One human-readable summary of the active filters, for the row count and the
+   empty state. Only the set ones are listed, so a single group filter reads
+   "مجموعة الاثنين" exactly as it did before the other three were added. */
+var filterBits = [];
+if (FS.group) filterBits.push("مجموعة " + (GROUP_MAP[FS.group] || FS.group));
+if (FS.level) filterBits.push(SUBJECT_MAP[FS.level] || FS.level);
+if (FS.grade) filterBits.push(GRADE_MAP[FS.grade] || FS.grade);
+if (FS.q) filterBits.push("بحث: " + FS.q);
+var filterText = filterBits.join(" — ");
+
+var ICON = {
+  chart: "M3 21V3h2v16h16v2H3Zm4-4V10h3v7H7Zm5 0V6h3v11h-3Zm5 0v-5h3v5h-3Z",
+  search: "M10 2a8 8 0 1 0 4.9 14.3l5.4 5.4 1.4-1.4-5.4-5.4A8 8 0 0 0 10 2Zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Z",
+  trash: "M8 2h8v2h5v2H3V4h5V2Zm-3 6h14l-1 14H6L5 8Zm4 2v10h2V10H9Zm4 0v10h2V10h-2Z",
+  users: "M16 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 1a3 3 0 1 0-3-3 3 3 0 0 0 3 3Zm0 2c-2.7 0-6 1.3-6 4v3h8v-3a5 5 0 0 1 1.5-3.4A10 10 0 0 0 8 14Zm8 0c-3 0-8 1.5-8 4.5V21h16v-2.5c0-3-5-4.5-8-4.5Z",
+  check: "M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z",
+  pen: "m3 17.2 9.9-9.9 3.8 3.8L6.8 21H3v-3.8ZM17.7 9.7 13.9 5.9l1.8-1.8a1 1 0 0 1 1.4 0l2.4 2.4a1 1 0 0 1 0 1.4l-1.8 1.8Z"
+};
+%>
+
+<%
+/* The shared toolbar. TYPE is already snapped back to a whitelisted key above,
+   so it is safe in the form action; :type is a path segment here rather than a
+   query parameter, which is why there is no `hidden` for it. */
+%>
+<%- include("_table-toolbar", { action: "/showStudentsDegree/" + TYPE, search: true }) %>
+
+<% if (rows.length) { %>
+<ul class="stats stats--3">
+  <li>
+    <span class="stat">
+      <span class="stat__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="<%= ICON.users %>" /></svg>
+      </span>
+      <span>
+        <span class="stat__value num" dir="ltr"><%= rows.length %></span>
+        <span class="stat__label">محاولة</span>
+      </span>
+    </span>
+  </li>
+  <li>
+    <span class="stat stat--accent">
+      <span class="stat__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="<%= ICON.check %>" /></svg>
+      </span>
+      <span>
+        <span class="stat__value num" dir="ltr"><%= submittedRows.length %></span>
+        <span class="stat__label">تم التسليم</span>
+      </span>
+    </span>
+  </li>
+  <li>
+    <span class="stat">
+      <span class="stat__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="<%= ICON.chart %>" /></svg>
+      </span>
+      <span>
+        <%
+        /* Averages the PERCENTAGES, not the raw marks. Papers in one list can
+           have different question counts, so averaging raw scores would weight
+           a 30-question exam the same as a 5-question quiz. */
+        %>
+        <span class="stat__value num" dir="ltr"><%= avg == null ? "—" : avg + "%" %></span>
+        <span class="stat__label">متوسط النتيجة</span>
+      </span>
+    </span>
+  </li>
+</ul>
+<% } %>
+
+<section class="panel">
+  <div class="panel__head">
+    <h2 class="panel__title">درجات <%= K.label %></h2>
+    <span class="pager__count">
+      <% if (rows.length) { %>
+      <span class="num" dir="ltr"><%= rows.length %></span> نتيجة
+      <% if (filtering) { %>
+      — <%= filterText %>
+      <% } %>
+      <% } else { %>
+      لا نتائج
+      <% } %>
+    </span>
+  </div>
+
+  <% if (!rows.length) { %>
+  <div class="empty-state">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="<%= ICON.chart %>" />
+    </svg>
+    <% if (filtering) { %>
+    <p class="empty-state__title">لا نتائج تطابق هذه التصفية</p>
+    <p>لم يدخل أي طالب مطابق لـ «<%= filterText %>»
+      <%= K.label %> بعد.
+      <a href="/showStudentsDegree/<%= TYPE %>">اعرض كل النتائج</a>.</p>
+    <% } else { %>
+    <p class="empty-state__title">لا توجد نتائج بعد</p>
+    <p>ستظهر هنا درجات الطلاب فور دخولهم <%= K.label %>.</p>
+    <% } %>
+  </div>
+
+  <% } else { %>
+  <div class="table-scroll">
+    <table class="table">
+      <caption class="sr-only">
+        درجات الطلاب في <%= K.label %>، مع إمكانية حذف أي نتيجة
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">الطالب</th>
+          <th scope="col">رقم الكارت</th>
+          <th scope="col">المجموعة</th>
+          <th scope="col">صف الطالب</th>
+          <th scope="col">اسم <%= K.one %></th>
+          <th scope="col">صف <%= K.one %></th>
+          <th scope="col">الدرجة</th>
+          <th scope="col">حالة التصحيح</th>
+          <th scope="col">إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (var r = 0; r < rows.length; r++) { var row = rows[r]; %>
+        <tr>
+          <td class="table__name"><%= row.name %></td>
+
+          <td>
+            <% if (row.card) { %>
+            <span class="table__code" dir="ltr"><%= row.card %></span>
+            <% } else { %>—<% } %>
+          </td>
+
+          <td>
+            <% if (row.group) { %>
+            <span class="badge"><%= GROUP_MAP[row.group] || row.group %></span>
+            <% } else { %>—<% } %>
+          </td>
+
+          <td>
+            <%
+            /* Two separate elements, not "grade & subject" concatenated. The
+               old string built an unescaped bare & — an invalid entity start —
+               and printed "undefined" whenever either half was missing. */
+            %>
+            <% if (row.sGrade) { %>
+            <span class="tag"><%= GRADE_MAP[row.sGrade] || row.sGrade %></span>
+            <% } %>
+            <% if (row.sSubject) { %>
+            <span class="tag"><%= SUBJECT_MAP[row.sSubject] || row.sSubject %></span>
+            <% } %>
+            <% if (!row.sGrade && !row.sSubject) { %>—<% } %>
+          </td>
+
+          <td class="table__name"><%= row.paper %></td>
+
+          <td>
+            <% if (row.pGrade) { %>
+            <span class="tag"><%= GRADE_MAP[row.pGrade] || row.pGrade %></span>
+            <% } %>
+            <% if (row.pSubject) { %>
+            <span class="tag"><%= SUBJECT_MAP[row.pSubject] || row.pSubject %></span>
+            <% } %>
+            <% if (!row.pGrade && !row.pSubject) { %>—<% } %>
+          </td>
+
+          <td>
+            <% if (!row.submitted) { %>
+            <%
+            /* Opened but never handed in. The old page rendered this as "/10"
+               — EJS prints null as "" — which read as a zero. */
+            %>
+            <span class="badge">لم يُسلّم</span>
+            <% } else { %>
+            <%
+            /* WHICH MARK THIS CELL SHOWS.
+               A paper with no essay questions has nothing manual about it, so
+               it shows the auto-score out of the auto denominator, exactly as
+               before this feature. A paper with essays shows the COMBINED
+               total — auto plus what the teacher awarded — which is the mark
+               the request calls final, and which only means anything once the
+               marking is done. Until then the pending count sits beside it, so
+               the number is never read as a finished result.
+
+               The percentage decides the colour, and the fraction is shown
+               beside it: 6/10 and 30/50 are both 60%, and the admin needs the
+               raw marks as well as the comparison. Never colour alone — the
+               numbers carry the same information for a greyscale print or a
+               colour-blind reader. */
+            var hasManual = row.manualOutOf > 0;
+            var shown = hasManual ? row.final : row.score;
+            var shownOf = hasManual ? row.finalOutOf : row.totalQ;
+            var shownPct =
+              shown != null && shownOf > 0 ? Math.round((shown / shownOf) * 100) : null;
+            var band = shownPct == null ? "" : shownPct >= 50 ? " score--pass" : " score--fail";
+            %>
+            <span class="score<%= band %>">
+              <span class="num" dir="ltr"><%= shown == null ? row.score : shown %>/<%= shownOf %></span>
+              <% if (shownPct != null) { %>
+              <span class="score__pct num" dir="ltr"><%= shownPct %>%</span>
+              <% } %>
+            </span>
+            <% if (row.pending) { %>
+            <span class="badge badge--pending">
+              <span class="num" dir="ltr"><%= row.pending %></span> سؤال بدون درجة
+            </span>
+            <% } %>
+            <% } %>
+          </td>
+
+          <td>
+            <%
+            /* Only a submitted paper has a marking status; an unopened one is
+               a dash rather than "لا يحتاج تصحيحًا", which would read as a
+               judgement about a paper nobody has handed in. */
+            %>
+            <% if (!row.submitted) { %>—<% } else { %>
+            <span class="badge<%= BADGE[row.status] || "" %>">
+              <%= ST_LABEL[row.status] || row.status %>
+            </span>
+            <% } %>
+          </td>
+
+          <td>
+            <div class="row-actions">
+              <%
+              /* Into the review page for this one attempt. Rendered only for a
+                 submitted paper — there is nothing to read on an attempt that
+                 was never handed in — and it is a link because opening a
+                 submission is a GET.
+
+                 The label follows the work: a paper with no essay questions is
+                 already fully marked, so its link says "عرض". */
+              %>
+              <% if (row.submitted) { %>
+              <a class="btn btn--sm" href="/grading/<%= row.id %>">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="<%= row.status === ST.NONE ? ICON.check : ICON.pen %>" />
+                </svg>
+                <%= row.status === ST.NONE ? "عرض" : "تصحيح" %>
+              </a>
+              <% } %>
+
+              <%
+              /* POST, not a GET link — see the header note. data-confirm is
+                 read by admin.js; with JS unavailable the delete still works,
+                 it just asks nothing first. */
+              %>
+              <form
+                method="post"
+                action="/removestudentDegree/<%= encodeURIComponent(row.pType) %>/<%= row.id %>"
+                data-confirm="حذف نتيجة «<%= row.name %>» في «<%= row.paper %>»؟ لا يمكن التراجع."
               >
-
-                Select Group
-
-              </option>
-
-              <option name="group" value="All">All</option>
-
-
-
-              <option name="group" value="OnlineStudent">OnlineStudent</option>
-
-              <option name="group" value="Monday">Monday</option>
-
-              <option name="group" value="Tuesday">Tuesday</option>
-
-              <option name="group" value="Wednesday">Wednesday</option>
-
-              <option name="group" value="Thursday">Thursday</option>
-
-              <option name="group" value="Friday">Friday</option>
-
-              <option name="group" value="Saturday">Saturday</option>
-
-              <option name="group" value="Sunday">Sunday</option>
-
-            </select>
-
-            <button>Search</button>
-
-            </form>
-
-          
-
-            <br />
-
-
-
-            <div class="customers">
-
-              <div class="cardHeader">
-
-                <h2><%=type%></h2>
-
-              </div>
-
-              <table>
-
-                <thead>
-
-                  <tr>
-
-                    <td>Name</td>
-
-                    <td>cardName</td>
-
-                    <td>Group</td>
-
-                    <td>Grade&Specialization</td>
-
-
-
-                    <td><%=type%>Name</td>
-
-                    <td><%=type%>Level</td>
-
-                    <td>degree</td>
-
-                    <td>Action</td>
-
-                  </tr>
-
-                </thead>
-
-                <tbody>
-
-                  <% for(let i of data){%>
-
-                    <% if(i){%>
-		<%if(i['quiz']){%>
-                   <% if(i.student != null){ %> 
-
-                  <tr>
-
-                    <td><%=i['student'].fullName%></td>
-
-                    <td><%=i.student.cardNumber%></td>
-
-                    <td><%=i['student'].group%></td>
-
-
-
-                    <td>
-
-                      <%=(i['student'].grade != undefined) ? (i['student'].grade +" &" ) : "" ; %>
-
-                      <%=i['student'].educetionlevel%>
-
-                    </td>
-			<%if(i['quiz']){%>
-                    <td><%=i['quiz'].nameQuiz%></td>
-			<%}%>
-                    <td>
-
-                      <%=(i['quiz'].grade != undefined) ? (i['quiz'].grade +" &" ) : "" ; %>
-
-                      <%=i['quiz'].educetionlevel%>
-
-                    </td>
-
-
-
-                    <td><%=i.totalDegree%>/<%=i.quiz.quiz.length%></td>
-
-                    <td>
-
-                      <a
-
-                        style="
-
-                          background-color: brown;
-
-                          border-radius: 0.5rem;
-
-                          padding: 0.5rem 0.5rem;
-
-                          color: var(--white);
-
-                        "
-
-                        href="/removestudentDegree/<%=i['quiz'].type%>/<%=i._id %>"
-
-                        >delete</a
-
-                      >
-
-                    </td>
-
-                    
-
-                  </tr>
-
-                  <% } %> 
-<%}%>
-                  <% } %> 
-
-                  <%}%>
-
-                </tbody>
-
-              </table>
-
+                <% if (token) { %>
+                <input type="hidden" name="_csrf" value="<%= token %>" />
+                <% } %>
+                <% if (FS.touched) { %>
+                <%
+                /* Sends the admin back to the exact list they were reading —
+                   all four filters and the sort, not just the group — instead
+                   of dropping them into the unfiltered one. The route rebuilds
+                   the querystring from these; see the redirect there. */
+                %>
+                <input type="hidden" name="group" value="<%= FS.group %>" />
+                <input type="hidden" name="educetionlevel" value="<%= FS.level %>" />
+                <input type="hidden" name="grade" value="<%= FS.grade %>" />
+                <input type="hidden" name="sort" value="<%= FS.sort %>" />
+                <input type="hidden" name="q" value="<%= FS.q %>" />
+                <% } %>
+                <button class="btn btn--danger btn--sm" type="submit">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="<%= ICON.trash %>" />
+                  </svg>
+                  حذف
+                </button>
+              </form>
             </div>
+          </td>
+        </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+  <% } %>
 
-          </div>
+  <% if (orphans) { %>
+  <p class="pager">
+    <span class="pager__count">
+      <span class="num" dir="ltr"><%= orphans %></span>
+      نتيجة مخفية تخص <%= K.one %> تم حذفه.
+    </span>
+  </p>
+  <% } %>
+</section>
 
-        </div>
-
-      </div>
-
-    </div>
-
-    <script src="../admin/dashboard/assets/js/main.js"></script>
-
-    <script
-
-      type="module"
-
-      src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"
-
-    ></script>
-
-    <script
-
-      nomodule
-
-      src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"
-
-    ></script>
-
-  </body>
-
-</html>
-
-
+<%- include("_foot") %>

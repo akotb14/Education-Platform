@@ -72,7 +72,12 @@ function was(key) {
 }
 
 /* Per-kind copy and behaviour. `unitBound` is the real distinction: homework
-   and quiz hang off a unit row, an exam does not. */
+   and quiz hang off a unit row, an exam does not.
+
+   `editHref` and `questionsHref` are two different destinations on purpose.
+   Edit opens the paper's own fields only (name, description, window, duration);
+   questions are added, reordered, edited and deleted on the questions page. A
+   row therefore offers both, and neither one can reach the other's data. */
 var META = {
   homework: {
     label: "واجب",
@@ -80,10 +85,12 @@ var META = {
     addTitle: "إضافة واجب",
     lede: "الواجب يُربط بدرس. اكتب كل الأسئلة هنا دفعة واحدة.",
     editHref: "/editHomework/",
+    questionsHref: "/questionsOfHomework/",
     removeHref: "/removeHomework/",
     unitBound: true,
     hasWindow: false,
-    hasDuration: false
+    hasDuration: false,
+    hasDueDate: true
   },
   quiz: {
     label: "كويز",
@@ -91,10 +98,12 @@ var META = {
     addTitle: "إضافة كويز",
     lede: "الكويز يُربط بدرس. اكتب كل الأسئلة هنا دفعة واحدة.",
     editHref: "/editQuiz/",
+    questionsHref: "/questionsOfQuiz/",
     removeHref: "/removeQuiz/",
     unitBound: true,
     hasWindow: false,
-    hasDuration: true
+    hasDuration: true,
+    hasDueDate: false
   },
   exam: {
     label: "امتحان",
@@ -102,10 +111,12 @@ var META = {
     addTitle: "إضافة امتحان",
     lede: "الامتحان غير مرتبط بدرس؛ يُفتح ويُغلق في موعد محدد.",
     editHref: "/editExam/",
+    questionsHref: "/questionsOfExam/",
     removeHref: "/removeExam/",
     unitBound: false,
     hasWindow: true,
-    hasDuration: true
+    hasDuration: true,
+    hasDueDate: false
   }
 };
 var M = META[KIND] || META.homework;
@@ -120,8 +131,17 @@ var GRADES = {
 /* Unit options grouped by subject / grade / month, so a long list is
    navigable. Rows that already carry a paper of THIS kind are marked and
    disabled: addQuiz refuses them (it only fills an empty quizId / homeId), and
-   the old form offered them anyway and then silently did nothing. */
-var groups = [];
+   the old form offered them anyway and then silently did nothing.
+
+   Built in the shape _field.ejs consumes — { label, items:[{ value, label,
+   disabled }] } — so the optgroup markup is emitted once, in the partial,
+   instead of being retyped here and again in _edit-paper.ejs. The "already
+   linked" note is folded into the label rather than appended in the template:
+   an <option> holds text, not markup, so a suffix is part of the label whatever
+   it looks like in source. `taken` is kept alongside `disabled` because
+   freeCount below counts on it, and the two mean different things — one is why,
+   the other is the effect. */
+var unitGroups = [];
 var seen = {};
 for (var d = 0; d < unitDocs.length; d++) {
   var doc = unitDocs[d] || {};
@@ -138,20 +158,21 @@ for (var d = 0; d < unitDocs.length; d++) {
 
     if (!seen[head]) {
       seen[head] = { label: head, items: [] };
-      groups.push(seen[head]);
+      unitGroups.push(seen[head]);
     }
     seen[head].items.push({
       value: String(doc._id) + ":" + String(row._id),
-      label: row.unit || "بدون اسم",
+      label: (row.unit || "بدون اسم") + (taken ? " — مرتبط بالفعل" : ""),
+      disabled: taken,
       taken: taken
     });
   }
 }
 
 var freeCount = 0;
-for (var g = 0; g < groups.length; g++) {
-  for (var gi = 0; gi < groups[g].items.length; gi++) {
-    if (!groups[g].items[gi].taken) freeCount++;
+for (var g = 0; g < unitGroups.length; g++) {
+  for (var gi = 0; gi < unitGroups[g].items.length; gi++) {
+    if (!unitGroups[g].items[gi].taken) freeCount++;
   }
 }
 
@@ -161,6 +182,7 @@ var ICON = {
   edit: "M4 17.2 16.4 4.8l2.8 2.8L6.8 20H4v-2.8Zm14.9-11-1.3-1.3 1.4-1.4 1.3 1.3-1.4 1.4Z",
   trash: "M8 2h8v2h5v2H3V4h5V2Zm-3 6h14l-1 14H6L5 8Zm4 2v10h2V10H9Zm4 0v10h2V10h-2Z",
   plus: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z",
+  list: "M4 6h2v2H4V6Zm4 0h12v2H8V6ZM4 11h2v2H4v-2Zm4 0h12v2H8v-2ZM4 16h2v2H4v-2Zm4 0h12v2H8v-2Z",
   ok: "M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z",
   bad: "M12 2 1 21h22L12 2Zm0 6 6.5 11h-13L12 8Zm-1 3v4h2v-4h-2Zm0 5v2h2v-2h-2Z"
 };
@@ -188,7 +210,7 @@ var ICON = {
   <h2 class="form-card__title"><%= M.addTitle %></h2>
   <p class="form-card__lede"><%= M.lede %></p>
 
-  <% if (M.unitBound && !groups.length) { %>
+  <% if (M.unitBound && !unitGroups.length) { %>
   <div class="empty-state">
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="<%= ICON.paper %>" />
@@ -218,136 +240,122 @@ var ICON = {
     <input type="hidden" name="_csrf" value="<%= tok %>" />
     <% } %>
 
+    <%
+    /* The four top fields, through _field.ejs. What was hand-written here and
+       hand-written again in _edit-paper.ejs is now one call each, which is how
+       the two pages stop disagreeing: the edit form had lost `input--ltr`,
+       `dir="ltr"` and `required` on these very time fields.
+
+       nameQuiz spans the full width on all three kinds. It is the paper's
+       title — the thing the admin is naming — and a title beside a dropdown
+       reads as an afterthought. The short paired fields (subject+grade,
+       opens+closes) keep their two-up rows, and the duration takes the narrow
+       width because "00:30" needs five characters, not half a card. */
+    %>
     <div class="form-grid">
       <% if (M.unitBound) { %>
-      <div class="form-field">
-        <label class="label" for="unitRef">
-          الدرس <abbr title="مطلوب">*</abbr>
-        </label>
-        <%
-        /* ONE control instead of four. The value is docId:rowId, so the
-           subject, grade, month and unit name are all read from that row on
-           the server and cannot disagree with each other. */
-        %>
-        <select class="select" id="unitRef" name="unitRef" required>
-          <option value="">اختر الدرس…</option>
-          <% for (var gg = 0; gg < groups.length; gg++) { var grp = groups[gg]; %>
-          <optgroup label="<%= grp.label %>">
-            <% for (var k = 0; k < grp.items.length; k++) { var opt = grp.items[k]; %>
-            <option
-              value="<%= opt.value %>"
-              <%= opt.taken ? " disabled" : "" %>
-              <%= was("unitRef") === opt.value ? " selected" : "" %>
-            >
-              <%= opt.label %><%= opt.taken ? " — مرتبط بالفعل" : "" %>
-            </option>
-            <% } %>
-          </optgroup>
-          <% } %>
-        </select>
-        <p class="field-hint">
-          المادة والصف والشهر تُؤخذ من الدرس المختار، فلا يمكن أن تختلف عنه.
-        </p>
-      </div>
+      <%
+      /* ONE control instead of four. The value is docId:rowId, so the subject,
+         grade, month and unit name are all read from that row on the server and
+         cannot disagree with each other.
+
+         `unknown: false`: for every other select, echoing back a stored value
+         that is not in the list is the safe thing to do. Here the value is an
+         opaque pair of ObjectIds, so surfacing it would put
+         "aaaa…01:bbbb…02 (قيمة غير معروفة)" in front of the admin, which tells
+         them nothing they can act on. If a sticky value no longer matches a
+         free row, the honest state is "nothing selected" — the row was taken or
+         deleted, and picking again is the only way forward. */
+      %>
+      <%- include("_field", { fld: {
+        type: "select", name: "unitRef", id: "unitRef", label: "الدرس",
+        list: unitGroups, value: was("unitRef"), required: true,
+        full: true, unknown: false,
+        hint: "المادة والصف والشهر تُؤخذ من الدرس المختار، فلا يمكن أن تختلف عنه."
+      } }) %>
 
       <% } else { %>
-      <div class="form-field">
-        <label class="label" for="educetionlevel">
-          المادة <abbr title="مطلوب">*</abbr>
-        </label>
-        <select class="select" id="educetionlevel" name="educetionlevel" required>
-          <option value="">اختر المادة…</option>
-          <option value="biology"<%= was("educetionlevel") === "biology" ? " selected" : "" %>>الأحياء</option>
-          <option value="geology"<%= was("educetionlevel") === "geology" ? " selected" : "" %>>الجيولوجيا</option>
-        </select>
-      </div>
+      <%- include("_field", { fld: {
+        type: "select", name: "educetionlevel", id: "educetionlevel",
+        label: "المادة", list: "levels", value: was("educetionlevel"),
+        required: true
+      } }) %>
 
-      <div class="form-field">
-        <label class="label" for="grade">
-          الصف <abbr title="مطلوب">*</abbr>
-        </label>
-        <select class="select" id="grade" name="grade" required>
-          <option value="">اختر الصف…</option>
-          <option value="1st"<%= was("grade") === "1st" ? " selected" : "" %>>الصف الأول</option>
-          <option value="2nd"<%= was("grade") === "2nd" ? " selected" : "" %>>الصف الثاني</option>
-          <option value="3rd"<%= was("grade") === "3rd" ? " selected" : "" %>>الصف الثالث</option>
-        </select>
-      </div>
+      <%- include("_field", { fld: {
+        type: "select", name: "grade", id: "grade", label: "الصف",
+        list: "grades", value: was("grade"), required: true
+      } }) %>
       <% } %>
 
-      <div class="form-field">
-        <label class="label" for="nameQuiz">
-          اسم الـ<%= M.label %> <abbr title="مطلوب">*</abbr>
-        </label>
-        <input
-          class="input"
-          type="text"
-          id="nameQuiz"
-          name="nameQuiz"
-          required
-          maxlength="120"
-          autocomplete="off"
-          value="<%= was('nameQuiz') %>"
-          placeholder="مثال: <%= M.label %> الوحدة الأولى"
-        />
-      </div>
+      <%- include("_field", { fld: {
+        type: "text", name: "nameQuiz", id: "nameQuiz",
+        label: "اسم الـ" + M.label, value: was("nameQuiz"), required: true,
+        full: true, maxlength: 120, autocomplete: "off",
+        placeholder: "مثال: " + M.label + " الوحدة الأولى"
+      } }) %>
+
+      <%
+      /* Optional, and offered here as well as on the edit page on purpose: a
+         field that can only ever be filled in by creating the paper and then
+         going back to edit it is a field most papers will never have. Capped at
+         500 to match MAX_DESCRIPTION in quiz.contro.js, which REJECTS an
+         over-long value rather than truncating it — so the browser limit and
+         the server limit have to be the same number. */
+      %>
+      <%- include("_field", { fld: {
+        type: "textarea", name: "description", id: "description",
+        label: "الوصف", value: was("description"), full: true, tall: true,
+        rows: 4, maxlength: 500,
+        placeholder: "تعليمات أو ملاحظات قصيرة يراها الأدمن مع الـ" + M.label,
+        hint: "اختياري. لا يظهر للطالب."
+      } }) %>
 
       <% if (M.hasWindow) { %>
-      <div class="form-field">
-        <label class="label" for="startTime">
-          يفتح في <abbr title="مطلوب">*</abbr>
-        </label>
-        <input
-          class="input input--ltr"
-          type="datetime-local"
-          id="startTime"
-          name="startTime"
-          dir="ltr"
-          value="<%= was('startTime') %>"
-          required
-        />
-      </div>
+      <%- include("_field", { fld: {
+        type: "datetime-local", name: "startTime", id: "startTime",
+        label: "يفتح في", value: was("startTime"), required: true, width: "md"
+      } }) %>
 
-      <div class="form-field">
-        <label class="label" for="endTime">
-          يغلق في <abbr title="مطلوب">*</abbr>
-        </label>
-        <input
-          class="input input--ltr"
-          type="datetime-local"
-          id="endTime"
-          name="endTime"
-          dir="ltr"
-          value="<%= was('endTime') %>"
-          required
-        />
-      </div>
+      <%- include("_field", { fld: {
+        type: "datetime-local", name: "endTime", id: "endTime",
+        label: "يغلق في", value: was("endTime"), required: true, width: "md"
+      } }) %>
+      <% } %>
+
+      <% if (M.hasDueDate) { %>
+      <%
+      /* Homework only, and deliberately NOT the same thing as endTime. endTime
+         means "the window shuts and the paper locks"; a homework due date is a
+         date the student is told about. routes/homework.router.js reports
+         homework as state:"untimed" with no opensAt/closesAt, and making this
+         gate access would change what students can open — so it is recorded and
+         shown, and nothing else. */
+      %>
+      <%- include("_field", { fld: {
+        type: "datetime-local", name: "dueDate", id: "dueDate",
+        label: "موعد التسليم", value: was("dueDate"), width: "md",
+        hint: "اختياري. لا يُغلق الواجب تلقائيًا في هذا الموعد."
+      } }) %>
       <% } %>
 
       <% if (M.hasDuration) { %>
-      <div class="form-field">
-        <label class="label" for="quizTime">مدة الحل</label>
-        <%
-        /* Stored and parsed as "HH:MM" — see allowanceSeconds() in
-           quiz.contro.js. The old box shipped with value="hh:mm" as its
-           DEFAULT VALUE, not a placeholder, so submitting the form untouched
-           saved the literal string "hh:mm"; allowanceSeconds then parsed NaN
-           and the paper ended up untimed with no indication why. */
-        %>
-        <input
-          class="input input--ltr"
-          type="text"
-          id="quizTime"
-          name="quizTime"
-          dir="ltr"
-          inputmode="numeric"
-          pattern="[0-9]{1,2}:[0-9]{2}"
-          placeholder="00:30"
-          value="<%= was('quizTime') %>"
-          autocomplete="off"
-        />
-        <p class="field-hint">بصيغة ساعات:دقائق، مثل <span dir="ltr">01:30</span>. اتركه فارغًا لجعله بلا وقت.</p>
-      </div>
+      <%
+      /* Stored and parsed as "HH:MM" — see allowanceSeconds() in
+         quiz.contro.js. The old box shipped with value="hh:mm" as its DEFAULT
+         VALUE, not a placeholder, so submitting the form untouched saved the
+         literal string "hh:mm"; allowanceSeconds then parsed NaN and the paper
+         ended up untimed with no indication why.
+
+         hintHtml, not hint: the example time has to be wrapped in dir="ltr" or
+         the bidi algorithm moves it around inside the Arabic sentence. */
+      %>
+      <%- include("_field", { fld: {
+        type: "text", name: "quizTime", id: "quizTime", label: "مدة الحل",
+        value: was("quizTime"), width: "sm", ltr: true, inputmode: "numeric",
+        pattern: "[0-9]{1,2}:[0-9]{2}", placeholder: "00:30",
+        autocomplete: "off",
+        hintHtml: 'بصيغة ساعات:دقائق، مثل <span class="num" dir="ltr">01:30</span>. اتركه فارغًا لجعله بلا وقت.'
+      } }) %>
       <% } %>
     </div>
 
@@ -417,19 +425,21 @@ var ICON = {
 
     <p class="qbuilder__live sr-only" role="status" aria-live="polite" data-qlive></p>
 
-    <div class="form-actions">
-      <button class="btn" type="submit">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="<%= ICON.plus %>" />
-        </svg>
-        حفظ الـ<%= M.label %>
-        <span class="btn__badge num" dir="ltr" data-qcount><%= blocks.length %></span>
-      </button>
-      <p class="field-hint">
-        يُحفظ الـ<%= M.label %> بكل أسئلته دفعة واحدة. يمكنك تعديله أو إضافة
-        أسئلة إليه لاحقًا من الجدول أدناه.
-      </p>
-    </div>
+    <%
+    /* The badge and the note both belong to the button, so both go through the
+       partial. `badge` is what admin.js keeps in step with the question count —
+       it writes every [data-qcount] in the form — and putting the number on the
+       control the admin is about to press is the whole point of it: "حفظ الكويز
+       3" says what is being saved.
+
+       `icon: "plus"` because this creates a paper rather than saving edits to
+       one; _edit-paper.ejs uses the default save icon. Same partial, and the
+       difference between the two actions stays visible. */
+    %>
+    <%- include("_form-actions", { act: {
+      save: "حفظ الـ" + M.label, icon: "plus", badge: blocks.length,
+      note: "يُحفظ الـ" + M.label + " بكل أسئلته دفعة واحدة. يمكنك تعديله أو إضافة أسئلة إليه لاحقًا من الجدول أدناه."
+    } }) %>
   </form>
   <% } %>
 </section>
@@ -513,12 +523,28 @@ var ICON = {
           <% } %>
 
           <td>
+            <%
+            /* Two destinations, not one. "تعديل" opens the paper's own fields
+               (name, description, window, duration) and cannot touch a question;
+               "الأسئلة" opens the page where questions are added, reordered,
+               edited and deleted. Splitting the row action is what makes the
+               split visible — before this, "تعديل" was the only way in and it
+               put the question builder in front of an admin who only wanted to
+               fix a typo in the title. */
+            %>
             <div class="row-actions">
               <a class="btn btn--ghost btn--sm" href="<%= M.editHref %><%= it._id %>">
                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path d="<%= ICON.edit %>" />
                 </svg>
                 تعديل
+              </a>
+
+              <a class="btn btn--ghost btn--sm" href="<%= M.questionsHref %><%= it._id %>">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="<%= ICON.list %>" />
+                </svg>
+                الأسئلة
               </a>
 
               <form

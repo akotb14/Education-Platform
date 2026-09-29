@@ -29,6 +29,10 @@
      Named `student` (singular) for an array, which is what the route has
      always passed. `students` is accepted too so the local can be renamed on
      the route side later without breaking this view in between.
+
+     Plus the shared filter locals from util/tableFilters.viewLocals():
+     f, GROUPS, GRADES, SUBJECTS, SORTS, GROUP_LABEL, GRADE_LABEL,
+     SUBJECT_LABEL, qs — passed straight to _table-toolbar.ejs.
    ====================================================================== */
 
 var rows = [];
@@ -38,22 +42,16 @@ if (typeof student !== "undefined" && Array.isArray(student)) {
   rows = students;
 }
 
-var SUBJECTS = { biology: "الأحياء", geology: "الجيولوجيا" };
-var GRADES = {
-  "1st": "الصف الأول",
-  "2nd": "الصف الثاني",
-  "3rd": "الصف الثالث"
-};
-var GROUP_LABEL = {
-  OnlineStudent: "أونلاين",
-  Saturday: "السبت",
-  Sunday: "الأحد",
-  Monday: "الاثنين",
-  Tuesday: "الثلاثاء",
-  Wednesday: "الأربعاء",
-  Thursday: "الخميس",
-  Friday: "الجمعة"
-};
+var FS =
+  typeof f !== "undefined" && f && typeof f === "object"
+    ? f
+    : { group: "", grade: "", level: "", sort: "", q: "", active: false, touched: false };
+
+/* Label maps arrive as locals now — this page used to carry its own third
+   copy, written as a flat object while users.ejs derived one from an array. */
+var GRADE_MAP = typeof GRADE_LABEL !== "undefined" && GRADE_LABEL ? GRADE_LABEL : {};
+var SUBJECT_MAP = typeof SUBJECT_LABEL !== "undefined" && SUBJECT_LABEL ? SUBJECT_LABEL : {};
+var GROUP_MAP = typeof GROUP_LABEL !== "undefined" && GROUP_LABEL ? GROUP_LABEL : {};
 
 var ICON = {
   online:
@@ -80,6 +78,12 @@ var signHref = function (st) {
 };
 %>
 
+<%
+/* The same toolbar the roster and the degrees pages use. This page had no
+   filtering at all before — `find({})` and whatever order Mongo returned. */
+%>
+<%- include("_table-toolbar", { action: "/admin/studentOnline", search: true }) %>
+
 <section class="panel">
   <div class="panel__head">
     <h2 class="panel__title">طلبات الانضمام</h2>
@@ -93,8 +97,13 @@ var signHref = function (st) {
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="<%= ICON.online %>" />
     </svg>
+    <% if (FS.active) { %>
+    <p class="empty-state__title">لا طلبات تطابق هذه التصفية</p>
+    <p>جرّب تصفية أخرى أو <a href="/admin/studentOnline">أعد ضبط التصفية</a>.</p>
+    <% } else { %>
     <p class="empty-state__title">لا توجد طلبات انضمام</p>
     <p>تظهر هنا بيانات من يرسل نموذج الانضمام من صفحة الدخول.</p>
+    <% } %>
   </div>
 
   <% } else { %>
@@ -120,12 +129,12 @@ var signHref = function (st) {
           <td class="table__name"><%= st.fullName || "—" %></td>
 
           <td>
-            <%= st.educetionlevel ? (SUBJECTS[st.educetionlevel] || st.educetionlevel) : "—" %>
+            <%= st.educetionlevel ? (SUBJECT_MAP[st.educetionlevel] || st.educetionlevel) : "—" %>
           </td>
 
           <td>
             <% if (st.grade) { %>
-            <span class="tag"><%= GRADES[st.grade] || st.grade %></span>
+            <span class="tag"><%= GRADE_MAP[st.grade] || st.grade %></span>
             <% } else { %>—<% } %>
           </td>
 
@@ -137,7 +146,7 @@ var signHref = function (st) {
 
           <td>
             <% if (st.group) { %>
-            <span class="badge"><%= GROUP_LABEL[st.group] || st.group %></span>
+            <span class="badge"><%= GROUP_MAP[st.group] || st.group %></span>
             <% } else { %>—<% } %>
           </td>
 

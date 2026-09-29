@@ -71,30 +71,19 @@ var isChosen = function (name) {
 
 var token = typeof csrfToken !== "undefined" && csrfToken ? csrfToken : "";
 
-/* Values are the English keys the DB stores and every filter matches on.
-   NOTE the other admin views (addbank, editexam, edithomework) offer
-   Secondary/Preparatory for this same field — a value the create-side filters
-   can never match. This page keeps biology/geology, which is what /sign
-   writes and what the student-facing queries look for. */
-var LEVELS = [
-  { value: "biology", label: "الأحياء" },
-  { value: "geology", label: "الجيولوجيا" }
-];
-var GRADES = [
-  { value: "1st", label: "الصف الأول" },
-  { value: "2nd", label: "الصف الثاني" },
-  { value: "3rd", label: "الصف الثالث" }
-];
-var GROUPS = [
-  { value: "OnlineStudent", label: "أونلاين" },
-  { value: "Saturday", label: "السبت" },
-  { value: "Sunday", label: "الأحد" },
-  { value: "Monday", label: "الاثنين" },
-  { value: "Tuesday", label: "الثلاثاء" },
-  { value: "Wednesday", label: "الأربعاء" },
-  { value: "Thursday", label: "الخميس" },
-  { value: "Friday", label: "الجمعة" }
-];
+/* The LEVELS / GRADES / GROUPS arrays that used to be declared here are gone.
+   This page and addStudent.ejs each held their own copy of all three, and the
+   grade labels had already forked between them — "الصف الأول" here, "الأول"
+   there, on two pages an admin sees one after the other. They now live in
+   _field.ejs as presets, stated once.
+
+   The note that was attached to LEVELS is worth keeping, because it is about
+   the data and not the markup: three other admin views offer
+   Secondary/Preparatory for `educetionlevel`, values the student-facing queries
+   can never match. This page offers biology/geology, which is what /sign writes.
+   A record already holding one of the other values still shows it — _field.ejs
+   appends any stored value that is not in the list rather than dropping it. */
+
 var ROLES = [
   { value: "false", label: "طالب" },
   { value: "true", label: "مشرف" }
@@ -104,150 +93,106 @@ var ROLES = [
    anything that is not the literal "true" as a student. */
 var curRole = st.admin === "true" ? "true" : "false";
 
-var ICON = {
-  save: "M5 3h11l4 4v14H5V3Zm2 2v4h8V5H7Zm5 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z",
-  back: "M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5v-2H5V5h5V3Zm4.5 3.5L13 8l3 3H8v2h8l-3 3 1.5 1.5L20 12l-5.5-5.5Z"
-};
+/* Login resolves an account by phoneNumber and by nothing else, so moving a
+   number onto an account that already has it leaves one of the two unable to
+   sign in — silently, because both records still look correct in the dashboard.
+   POST /editStudent/:id rejects that and flashes the value it refused; this is
+   where the admin is told which field to change.
+
+   The refused value is echoed back into the input rather than the stored one:
+   the redirect re-reads the record from the database, so without this the field
+   would show the OLD number next to a message saying it is already in use. */
+var dupePhone =
+  typeof checkPhone !== "undefined" && checkPhone ? checkPhone : null;
+var phoneMsg = dupePhone ? "رقم الهاتف مُستخدَم بالفعل لحساب آخر." : "";
+var phoneValue = dupePhone && dupePhone.phoneNumber
+  ? dupePhone.phoneNumber
+  : st.phoneNumber;
 %>
 
-<a class="btn btn--ghost" href="/student" style="margin-block-end: var(--sp-5)">
-  <span aria-hidden="true">→</span>
-  رجوع إلى قائمة الطلاب
-</a>
+<%
+/* The back link was a `.btn btn--ghost` carrying the app's only inline
+   `style="margin-block-end"`. Two problems in one element: a button that
+   navigates is not a button, and a page that needs an inline style is a page
+   whose spacing has no home. It is now the same `.crumbs` nav that
+   gradingDetail.ejs and _edit-paper.ejs use, so all three edit pages start the
+   same way — and it says where the admin is, not just where they can go. */
+%>
+<nav class="crumbs" aria-label="مسار التنقل">
+  <a href="/student">الطلاب</a>
+  <span aria-hidden="true">/</span>
+  <span><%= st.fullName || "تعديل طالب" %></span>
+</nav>
 
-<div class="form-card">
+<section class="form-card">
+  <h2 class="form-card__title">
+    <%= st.fullName ? "تعديل بيانات " + st.fullName : "تعديل بيانات طالب" %>
+  </h2>
+  <p class="form-card__lede">
+    الاسم الكامل مطلوب. باقي الحقول يمكن تركها فارغة وتعديلها لاحقًا.
+  </p>
+
   <form method="post" action="/editStudent/<%= st._id %>">
     <input type="hidden" name="_csrf" value="<%= token %>" />
 
-    <h2 class="panel__title" style="margin-block-end: var(--sp-5)">
-      <%= st.fullName ? "تعديل بيانات " + st.fullName : "تعديل بيانات طالب" %>
-    </h2>
+    <%
+    /* The same nine includes as addStudent.ejs, in the same order, so the two
+       pages read as one form in two states rather than as two forms.
 
+       `required` is deliberately NOT aligned between them. addStudent requires
+       cardNumber because the schema does; this page never has, so adding it
+       would change what the server accepts — a validation change dressed as a
+       styling change. Flagged here instead: an admin can currently clear a
+       student's card number on save, and that number is the login identity. */
+    %>
     <div class="form-grid">
-      <div class="form-field form-grid__full">
-        <label class="label" for="fullName">الاسم الكامل</label>
-        <input
-          class="input"
-          type="text"
-          id="fullName"
-          name="fullName"
-          value="<%= st.fullName || "" %>"
-          required
-          autocomplete="name"
-        />
-      </div>
+      <%- include("_field", { fld: {
+        type: "text", name: "fullName", id: "fullName", label: "الاسم الكامل",
+        value: st.fullName, required: true, full: true, autocomplete: "name"
+      } }) %>
 
-      <div class="form-field">
-        <label class="label" for="cardNumber">رقم الكارت</label>
-        <input
-          class="input input--ltr"
-          type="text"
-          id="cardNumber"
-          name="cardNumber"
-          value="<%= st.cardNumber || "" %>"
-          inputmode="numeric"
-          autocomplete="off"
-        />
-        <span class="field-hint">يجب أن يكون غير مكرر بين الطلاب.</span>
-      </div>
+      <%- include("_field", { fld: {
+        type: "text", name: "cardNumber", id: "cardNumber", label: "رقم الكارت",
+        value: st.cardNumber, width: "md", ltr: true, inputmode: "numeric",
+        autocomplete: "off", hint: "رقم كارت الطالب. لا يمكن تكراره."
+      } }) %>
 
-      <div class="form-field">
-        <label class="label" for="phoneNumber">رقم الهاتف</label>
-        <input
-          class="input input--ltr"
-          type="tel"
-          id="phoneNumber"
-          name="phoneNumber"
-          value="<%= st.phoneNumber || "" %>"
-          inputmode="tel"
-          autocomplete="tel"
-        />
-        <span class="field-hint">هو ما يسجّل به الطالب دخوله.</span>
-      </div>
+      <%- include("_field", { fld: {
+        type: "tel", name: "phoneNumber", id: "phoneNumber", label: "رقم الهاتف",
+        value: phoneValue, width: "md", autocomplete: "tel",
+        error: phoneMsg,
+        hint: "هو ما يسجّل به الطالب دخوله. لا يمكن تكراره."
+      } }) %>
 
-      <div class="form-field">
-        <label class="label" for="educetionlevel">المادة</label>
-        <select class="select" id="educetionlevel" name="educetionlevel">
-          <option value="">— غير محددة —</option>
-          <% for (var l = 0; l < LEVELS.length; l++) { %>
-          <option
-            value="<%= LEVELS[l].value %>"
-            <%= st.educetionlevel === LEVELS[l].value ? " selected" : "" %>
-          >
-            <%= LEVELS[l].label %>
-          </option>
-          <% } %>
-          <%
-          /* A record holding a value outside this list (e.g. "Secondary",
-             written by one of the other admin views) would otherwise be
-             silently rewritten to "" on the next save. Surface it instead. */
-          var known = false;
-          for (var lk = 0; lk < LEVELS.length; lk++) {
-            if (LEVELS[lk].value === st.educetionlevel) known = true;
-          }
-          if (st.educetionlevel && !known) { %>
-          <option value="<%= st.educetionlevel %>" selected>
-            <%= st.educetionlevel %> (قيمة غير معروفة)
-          </option>
-          <% } %>
-        </select>
-      </div>
+      <%- include("_field", { fld: {
+        type: "select", name: "educetionlevel", id: "educetionlevel",
+        label: "المادة", list: "levels", value: st.educetionlevel
+      } }) %>
 
-      <div class="form-field">
-        <label class="label" for="grade">الصف</label>
-        <select class="select" id="grade" name="grade">
-          <option value="">— غير محدد —</option>
-          <% for (var gr = 0; gr < GRADES.length; gr++) { %>
-          <option
-            value="<%= GRADES[gr].value %>"
-            <%= st.grade === GRADES[gr].value ? " selected" : "" %>
-          >
-            <%= GRADES[gr].label %>
-          </option>
-          <% } %>
-        </select>
-      </div>
+      <%- include("_field", { fld: {
+        type: "select", name: "grade", id: "grade",
+        label: "الصف", list: "grades", value: st.grade
+      } }) %>
 
-      <div class="form-field">
-        <label class="label" for="group">المجموعة</label>
-        <select class="select" id="group" name="group">
-          <option value="">— غير محددة —</option>
-          <% for (var gp = 0; gp < GROUPS.length; gp++) { %>
-          <option
-            value="<%= GROUPS[gp].value %>"
-            <%= st.group === GROUPS[gp].value ? " selected" : "" %>
-          >
-            <%= GROUPS[gp].label %>
-          </option>
-          <% } %>
-          <%
-          var knownG = false;
-          for (var gk = 0; gk < GROUPS.length; gk++) {
-            if (GROUPS[gk].value === st.group) knownG = true;
-          }
-          if (st.group && !knownG) { %>
-          <option value="<%= st.group %>" selected><%= st.group %></option>
-          <% } %>
-        </select>
-      </div>
+      <%- include("_field", { fld: {
+        type: "select", name: "group", id: "group",
+        label: "المجموعة", list: "groups", value: st.group
+      } }) %>
 
-      <div class="form-field">
-        <label class="label" for="admin">الصلاحية</label>
-        <select class="select" id="admin" name="admin">
-          <% for (var ro = 0; ro < ROLES.length; ro++) { %>
-          <option
-            value="<%= ROLES[ro].value %>"
-            <%= curRole === ROLES[ro].value ? " selected" : "" %>
-          >
-            <%= ROLES[ro].label %>
-          </option>
-          <% } %>
-        </select>
-        <span class="field-hint">المشرف يرى لوحة التحكم بالكامل.</span>
-      </div>
+      <%- include("_field", { fld: {
+        type: "select", name: "admin", id: "admin", label: "الصلاحية",
+        neutral: false, list: ROLES, value: curRole,
+        hint: "المشرف يرى لوحة التحكم بالكامل."
+      } }) %>
     </div>
 
-    <fieldset class="fieldset" style="margin-block-start: var(--sp-5)">
+    <%
+    /* The `style="margin-block-start"` this fieldset carried is now the
+       `.fieldset` rule's own margin: a section that follows a grid of fields
+       always needs that gap, so it belongs to the component, not to this one
+       call site. */
+    %>
+    <fieldset class="fieldset">
       <legend>الشهور المتاحة للطالب</legend>
 
       <% if (!available.length) { %>
@@ -255,6 +200,11 @@ var ICON = {
         لا توجد شهور مُضافة لهذا الصف والمادة بعد، فلا شيء يمكن تحديده هنا.
       </p>
       <% } else { %>
+      <%
+      /* Not routed through _field.ejs: this is one `name` with many controls,
+         which is a different thing from a field with one control. The .check row
+         markup is shared through CSS instead. */
+      %>
       <div class="check-grid">
         <% for (var i = 0; i < available.length; i++) { var mo = available[i];
            if (!mo || !mo.month) continue; %>
@@ -280,16 +230,8 @@ var ICON = {
       <% } %>
     </fieldset>
 
-    <div class="form-actions">
-      <button class="btn" type="submit">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="<%= ICON.save %>" />
-        </svg>
-        حفظ التعديلات
-      </button>
-      <a class="btn btn--ghost" href="/student">إلغاء</a>
-    </div>
+    <%- include("_form-actions", { act: { cancel: "/student" } }) %>
   </form>
-</div>
+</section>
 
 <%- include("_foot") %>

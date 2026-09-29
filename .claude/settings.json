@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check controllers/units.contro.js)",
+      "Bash(echo \"contro ok=$?\")",
+      "Bash(node --check util/authMonth.js)",
+      "Bash(echo \"guard ok=$?\")",
+      "Bash(DATABASE_PATH=mongodb://127.0.0.1:27017/verify-only SecretPassword=local-verify-secret SESSION_SECRET=local-verify-session node -e ' *)",
+      "Bash(grep -n '^\\\\.\\\\\\(table\\\\|badge\\\\|tag\\\\|row-actions\\\\|toolbar\\\\|pager\\\\|score\\\\|skip\\\\|wrap\\\\|stat\\\\\\)[^ ,{]*' public/assets/css/admin.css)",
+      "Bash(node --check routes/exam.router.js)",
+      "Bash(echo \"router exit=$?\")",
+      "Bash(node -e ' *)",
+      "Bash(echo \"view exit=$?\")",
+      "Bash(node probe-degrees.js)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(grep -n \"^/\\\\* =\\\\|^\\\\.\\\\|^@media\\\\|^@supports\" public/assets/css/quiz.css)"
+    ]
+  }
+}

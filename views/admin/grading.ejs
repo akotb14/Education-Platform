@@ -1,0 +1,475 @@
+<%- include("_head", { active: "grading", title: "التصحيح" }) %>
+<%
+/* =========================================================================
+   GRADING QUEUE — every submitted attempt across quiz, homework and exam,
+   with what the machine marked, what is still waiting for a teacher, and a
+   way into the review page.
+
+   WHY THIS PAGE EXISTS AT ALL. Written answers have been captured on every
+   submission since question types were added, and nothing on the platform
+   read them: the student saw an auto-score that silently excluded their essay
+   and there was no screen on which anyone could award the missing marks. The
+   three /showStudentsDegree/:type lists are per-type and per-paper-agnostic;
+   marking is work that crosses all three, so it gets one list.
+
+   WHAT IS DERIVED AND WHAT IS STORED — the one thing to keep straight here.
+   `needsReview` on the document is a HINT written once at submit time. This
+   page never reads it. Every status, count and total comes from
+   util/grading.totalsOf(), which recomputes from the paper's questions joined
+   against the attempt's stored marks. A row therefore cannot get stuck saying
+   "بانتظار التصحيح" after being marked, and a paper that gained an essay
+   question after submission correctly reappears as needing work.
+
+   LOCALS
+     data       Array   submitted attempts, each populated with .quiz/.student
+     kind       String  the type facet: "quiz"|"homework"|"exam"|""
+     status     String  the status facet: "pending"|"partial"|"graded"|"none"|""
+     KINDS      Array   [{value,label}] for the type select
+     STATUSES   Array   [{value,label}] for the status select
+     KIND_LABEL Object  type -> Arabic label
+     f, GROUPS, GRADES, SUBJECTS, SORTS, GROUP_LABEL, GRADE_LABEL,
+     SUBJECT_LABEL, qs — util/tableFilters.viewLocals()
+     GSTATUS, GSTATUS_LABELS, totalsOf, statusOf — util/grading.viewLocals()
+
+   Every one is read behind a `typeof` guard: EJS compiles with `with(locals)`,
+   so naming a key the caller did not pass throws ReferenceError — and a render
+   error bypasses the route's try/catch, because Express hands it to its own
+   error handler. The guards are also what let this page be rendered by a
+   future caller that knows nothing about grading.
+   ====================================================================== */
+
+var attempts = typeof data !== "undefined" && Array.isArray(data) ? data : [];
+/* NO csrfToken here, deliberately. Every control on this page is a GET — the
+   toolbar form, the export link, the row links into the review page. The
+   marking POST lives on gradingDetail.ejs, which carries its own hidden
+   _csrf. Declaring an unused token here would read as "this page submits
+   something", and the next person to add a delete button would find a
+   variable already in scope and assume the route was passing it. */
+
+var FS =
+  typeof f !== "undefined" && f && typeof f === "object"
+    ? f
+    : { group: "", grade: "", level: "", sort: "", q: "", active: false, touched: false };
+
+var GROUP_MAP = typeof GROUP_LABEL !== "undefined" && GROUP_LABEL ? GROUP_LABEL : {};
+var GRADE_MAP = typeof GRADE_LABEL !== "undefined" && GRADE_LABEL ? GRADE_LABEL : {};
+
+var KIND = typeof kind !== "undefined" && kind ? String(kind) : "";
+var STAT = typeof status !== "undefined" && status ? String(status) : "";
+
+var KIND_LIST = typeof KINDS !== "undefined" && Array.isArray(KINDS) ? KINDS : [];
+var STAT_LIST = typeof STATUSES !== "undefined" && Array.isArray(STATUSES) ? STATUSES : [];
+var KMAP =
+  typeof KIND_LABEL !== "undefined" && KIND_LABEL
+    ? KIND_LABEL
+    : { quiz: "كويز", homework: "واجب", exam: "امتحان" };
+
+/* The status vocabulary, with the same inline fallback pattern every shared
+   local uses so this template still renders if only the filter locals are
+   passed. */
+var ST =
+  typeof GSTATUS !== "undefined" && GSTATUS
+    ? GSTATUS
+    : { NONE: "none", PENDING: "pending", PARTIAL: "partial", GRADED: "graded" };
+var ST_LABEL =
+  typeof GSTATUS_LABELS !== "undefined" && GSTATUS_LABELS
+    ? GSTATUS_LABELS
+    : { none: "لا يحتاج تصحيحًا", pending: "بانتظار التصحيح", partial: "تصحيح جزئي", graded: "تم التصحيح" };
+
+/* The one function this page cannot sensibly inline. Without it every number
+   in the table would have to be recomputed here in template code — which is
+   how the three graders this app started with drifted apart. The fallback
+   reports "nothing to mark", which is the truthful reading when the helper is
+   absent: no marks can be known without it. */
+var TOTALS =
+  typeof totalsOf === "function"
+    ? totalsOf
+    : function (p, a) {
+        var n = p && Array.isArray(p.quiz) ? p.quiz.length : 0;
+        var s = a && a.totalDegree != null && a.totalDegree !== "" ? Number(a.totalDegree) : null;
+        if (s !== null && !isFinite(s)) s = null;
+        return {
+          auto: s, autoOutOf: n, manual: 0, manualOutOf: 0,
+          final: s, finalOutOf: n, pct: null, essays: 0, pending: 0,
+          submitted: s !== null, status: "none"
+        };
+      };
+
+/* Dates are formatted with the browser-independent parts only — no locale
+   month names, no Intl — so the string is identical on the server whatever
+   the host's ICU build is. Latin digits, marked dir="ltr" where rendered. */
+function stamp(d) {
+  if (!d) return "";
+  var t = d instanceof Date ? d : new Date(d);
+  if (isNaN(t.getTime())) return "";
+  var p = function (n) { return (n < 10 ? "0" : "") + n; };
+  return (
+    t.getFullYear() + "-" + p(t.getMonth() + 1) + "-" + p(t.getDate()) +
+    " " + p(t.getHours()) + ":" + p(t.getMinutes())
+  );
+}
+
+/* One pass, so the summary tiles cannot disagree with the rows below.
+
+   The route has already dropped attempts with a deleted student or a deleted
+   paper, so the export and this table are the same set. The guards stay
+   because this view must not throw on a row that arrives from anywhere
+   else. */
+var rows = [];
+var orphans = 0;
+for (var a = 0; a < attempts.length; a++) {
+  var it = attempts[a];
+  if (!it || !it.student) continue;
+  if (!it.quiz) { orphans++; continue; }
+
+  var t = TOTALS(it.quiz, it);
+  var qCount = Array.isArray(it.quiz.quiz) ? it.quiz.quiz.length : 0;
+
+  /* A real hand-in time if there is one. Attempts submitted before
+     submittedAt existed fall back to the id's timestamp — which is when the
+     attempt was STARTED, up to a full quizTime earlier — and the row says so
+     rather than presenting it as a hand-in time. */
+  var when = it.submittedAt ? stamp(it.submittedAt) : "";
+  var started = "";
+  /* HANDED IN AFTER THE DEADLINE. util/attemptTime.js stamps these when the
+     answers arrive more than its grace window past the attempt's own deadline;
+     the submission is still recorded and graded, and forced into this queue.
+     Without showing it here, a late hand-in appears as an ordinary attempt
+     waiting to be marked with nothing saying why.
+
+     Absent on every attempt submitted before the flag existed, which reads as
+     "not known to be late" — not as "on time" — so nothing is labelled unless
+     the flag is actually set. */
+  var isLate = it.late === true;
+  var lateMins = isLate && it.lateBy ? Math.max(1, Math.round(Number(it.lateBy) / 60)) : 0;
+  if (!when && it._id) {
+    /* .lean() documents keep the ObjectId instance, so getTimestamp is
+       available; a plain string id (a stub, a test) is not worth throwing
+       over. */
+    try {
+      started = typeof it._id.getTimestamp === "function" ? stamp(it._id.getTimestamp()) : "";
+    } catch (e) {
+      started = "";
+    }
+  }
+
+  rows.push({
+    id: it._id,
+    name: it.student.fullName || "—",
+    card: it.student.cardNumber || "",
+    group: it.student.group || "",
+    sGrade: it.student.grade || "",
+    paper: it.quiz.nameQuiz || "—",
+    kind: it.type || it.quiz.type || "",
+    when: when,
+    started: started,
+    late: isLate,
+    lateMins: lateMins,
+    questions: qCount,
+    auto: t.auto,
+    autoOutOf: t.autoOutOf,
+    manual: t.manual,
+    manualOutOf: t.manualOutOf,
+    final: t.final,
+    finalOutOf: t.finalOutOf,
+    pending: t.pending,
+    status: t.status
+  });
+}
+
+/* The two numbers a teacher opening this page actually wants: how much work
+   is left, and how many essays that is. */
+var waiting = rows.filter(function (r) {
+  return r.status === ST.PENDING || r.status === ST.PARTIAL;
+});
+var pendingQs = rows.reduce(function (s, r) { return s + r.pending; }, 0);
+
+var filtering = !!(FS.active || KIND || STAT);
+
+var filterBits = [];
+if (FS.group) filterBits.push("مجموعة " + (GROUP_MAP[FS.group] || FS.group));
+if (FS.grade) filterBits.push(GRADE_MAP[FS.grade] || FS.grade);
+if (FS.q) filterBits.push("بحث: " + FS.q);
+if (KIND) filterBits.push(KMAP[KIND] || KIND);
+if (STAT) filterBits.push(ST_LABEL[STAT] || STAT);
+var filterText = filterBits.join(" — ");
+
+/* The querystring this page's own links must carry. `qs` covers the four
+   shared filters; the two facets here are appended the same way the route
+   does it, so a link built in the view and a redirect built on the server
+   produce the same URL. */
+var QS = typeof qs === "function" ? qs : function () { return ""; };
+function pageQuery(extra) {
+  var base = QS(FS, extra);
+  var bits = [];
+  if (KIND) bits.push("type=" + encodeURIComponent(KIND));
+  if (STAT) bits.push("status=" + encodeURIComponent(STAT));
+  if (!bits.length) return base;
+  return base ? base + "&" + bits.join("&") : "?" + bits.join("&");
+}
+
+var ICON = {
+  check: "M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z",
+  clock: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 10.6V6h-2v7.4l5 3 1-1.7-4-2.1Z",
+  pen: "m3 17.2 9.9-9.9 3.8 3.8L6.8 21H3v-3.8ZM17.7 9.7 13.9 5.9l1.8-1.8a1 1 0 0 1 1.4 0l2.4 2.4a1 1 0 0 1 0 1.4l-1.8 1.8Z",
+  chart: "M3 21V3h2v16h16v2H3Zm4-4V10h3v7H7Zm5 0V6h3v11h-3Zm5 0v-5h3v5h-3Z"
+};
+
+/* Maps a status to its badge modifier. The classes exist in admin.css beside
+   the .badge--review this replaces. */
+var BADGE = {};
+BADGE[ST.NONE] = "";
+BADGE[ST.PENDING] = " badge--pending";
+BADGE[ST.PARTIAL] = " badge--partial";
+BADGE[ST.GRADED] = " badge--graded";
+%>
+
+<%
+/* The shared toolbar, with this page's two extra facets handed to it as
+   `selects` so everything lives in ONE form and one submit — see the partial.
+
+   `f` is overridden rather than mutated: the include's own data wins over the
+   outer locals, and the only change is `touched`, so the "إلغاء التصفية"
+   button appears when only a type or status is set. Mutating FS instead would
+   also change the filter summary above, which is computed from it.
+
+   NO `hidden` HERE, deliberately. These two facets used to be passed as hidden
+   fields as well, to get them into the export link — and that broke the very
+   controls it was preserving. The hidden input and the select shared a `name`,
+   so submitting the form sent `type` twice; Express's querystring parser turns
+   a repeated key into an ARRAY, and the route's whitelist requires a string,
+   so it read the filter as unset. Once a type was applied, changing or
+   clearing it silently cleared it instead. The partial now folds `selects`
+   into the export link itself, so the facet lives in exactly one control. */
+%>
+<%- include("_table-toolbar", {
+  action: "/grading",
+  search: true,
+  f: {
+    group: FS.group, grade: FS.grade, level: FS.level, sort: FS.sort, q: FS.q,
+    active: FS.active,
+    touched: !!(FS.touched || KIND || STAT)
+  },
+  selects: [
+    { id: "type", name: "type", label: "النوع", list: KIND_LIST, current: KIND, allLabel: "كل الأنواع" },
+    { id: "status", name: "status", label: "حالة التصحيح", list: STAT_LIST, current: STAT, allLabel: "كل الحالات" }
+  ]
+}) %>
+
+<% if (rows.length) { %>
+<ul class="stats stats--3">
+  <li>
+    <span class="stat">
+      <span class="stat__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="<%= ICON.chart %>" /></svg>
+      </span>
+      <span>
+        <span class="stat__value num" dir="ltr"><%= rows.length %></span>
+        <span class="stat__label">تسليم</span>
+      </span>
+    </span>
+  </li>
+  <li>
+    <span class="stat stat--accent">
+      <span class="stat__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="<%= ICON.clock %>" /></svg>
+      </span>
+      <span>
+        <span class="stat__value num" dir="ltr"><%= waiting.length %></span>
+        <span class="stat__label">بانتظار التصحيح</span>
+      </span>
+    </span>
+  </li>
+  <li>
+    <span class="stat">
+      <span class="stat__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="<%= ICON.pen %>" /></svg>
+      </span>
+      <span>
+        <span class="stat__value num" dir="ltr"><%= pendingQs %></span>
+        <span class="stat__label">سؤال بدون درجة</span>
+      </span>
+    </span>
+  </li>
+</ul>
+<% } %>
+
+<section class="panel">
+  <div class="panel__head">
+    <h2 class="panel__title">تصحيح التسليمات</h2>
+    <span class="pager__count">
+      <% if (rows.length) { %>
+      <span class="num" dir="ltr"><%= rows.length %></span> نتيجة
+      <% if (filtering) { %>— <%= filterText %><% } %>
+      <% } else { %>
+      لا نتائج
+      <% } %>
+    </span>
+  </div>
+
+  <% if (!rows.length) { %>
+  <div class="empty-state">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="<%= ICON.check %>" />
+    </svg>
+    <% if (filtering) { %>
+    <p class="empty-state__title">لا تسليمات تطابق هذه التصفية</p>
+    <p>
+      لا يوجد تسليم مطابق لـ «<%= filterText %>».
+      <a href="/grading">اعرض كل التسليمات</a>.
+    </p>
+    <% } else { %>
+    <p class="empty-state__title">لا توجد تسليمات بعد</p>
+    <p>ستظهر هنا كل أوراق الطلاب بعد تسليمها، مع ما يحتاج منها تصحيحًا يدويًا.</p>
+    <% } %>
+  </div>
+
+  <% } else { %>
+  <div class="table-scroll">
+    <table class="table">
+      <caption class="sr-only">
+        تسليمات الطلاب في الكويزات والواجبات والامتحانات، ودرجاتها وحالة تصحيحها
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">الطالب</th>
+          <th scope="col">الورقة</th>
+          <th scope="col">النوع</th>
+          <th scope="col">تاريخ التسليم</th>
+          <th scope="col">الأسئلة</th>
+          <th scope="col">تلقائي</th>
+          <th scope="col">يدوي</th>
+          <th scope="col">الدرجة النهائية</th>
+          <th scope="col">الحالة</th>
+          <th scope="col">إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (var r = 0; r < rows.length; r++) { var row = rows[r]; %>
+        <tr>
+          <td class="table__name">
+            <%= row.name %>
+            <% if (row.card) { %>
+            <span class="table__code" dir="ltr"><%= row.card %></span>
+            <% } %>
+            <% if (row.group) { %>
+            <span class="badge"><%= GROUP_MAP[row.group] || row.group %></span>
+            <% } %>
+          </td>
+
+          <td class="table__name"><%= row.paper %></td>
+
+          <td>
+            <% if (row.kind) { %>
+            <span class="tag"><%= KMAP[row.kind] || row.kind %></span>
+            <% } else { %>—<% } %>
+          </td>
+
+          <td>
+            <% if (row.when) { %>
+            <span class="num" dir="ltr"><%= row.when %></span>
+            <% } else if (row.started) { %>
+            <%
+            /* Submitted before the hand-in time was recorded. Shown as what it
+               actually is — the moment the attempt was opened — rather than
+               silently labelled as a submission time it is not. */
+            %>
+            <span class="num" dir="ltr"><%= row.started %></span>
+            <span class="tag">بدء المحاولة</span>
+            <% } else { %>—<% } %>
+            <% if (row.late) { %>
+            <%
+            /* Late, with how late. The teacher decides what to do about it —
+               the platform records it and says so, and does not silently take
+               the marks away. */
+            %>
+            <span class="badge badge--late">
+              متأخر<% if (row.lateMins) { %>
+              <span class="num" dir="ltr">+<%= row.lateMins %></span> د<% } %>
+            </span>
+            <% } %>
+          </td>
+
+          <td><span class="num" dir="ltr"><%= row.questions %></span></td>
+
+          <td>
+            <% if (row.auto == null) { %>—<% } else { %>
+            <span class="num" dir="ltr"><%= row.auto %>/<%= row.autoOutOf %></span>
+            <% } %>
+          </td>
+
+          <td>
+            <% if (row.manualOutOf <= 0) { %>
+            <%
+            /* Nothing on this paper is marked by hand. A dash, not 0/0 —
+               "zero out of zero" reads as a mark that was awarded. */
+            %>
+            —
+            <% } else { %>
+            <span class="num" dir="ltr"><%= row.manual %>/<%= row.manualOutOf %></span>
+            <% if (row.pending) { %>
+            <span class="badge badge--pending">
+              <span class="num" dir="ltr"><%= row.pending %></span> بدون درجة
+            </span>
+            <% } %>
+            <% } %>
+          </td>
+
+          <td>
+            <% if (row.final == null) { %>—<% } else { %>
+            <%
+            /* Coloured by the final percentage, and always beside the raw
+               fraction: 6/10 and 30/50 are both 60% and a teacher needs the
+               marks as well as the comparison. Colour alone would also be a
+               WCAG 1.4.1 failure. */
+            var fpct = row.finalOutOf > 0 ? Math.round((row.final / row.finalOutOf) * 100) : null;
+            var band = fpct == null ? "" : fpct >= 50 ? " score--pass" : " score--fail";
+            %>
+            <span class="score<%= band %>">
+              <span class="num" dir="ltr"><%= row.final %>/<%= row.finalOutOf %></span>
+              <% if (fpct != null) { %>
+              <span class="score__pct num" dir="ltr"><%= fpct %>%</span>
+              <% } %>
+            </span>
+            <% } %>
+          </td>
+
+          <td>
+            <span class="badge<%= BADGE[row.status] || "" %>">
+              <%= ST_LABEL[row.status] || row.status %>
+            </span>
+          </td>
+
+          <td>
+            <div class="row-actions">
+              <%
+              /* A link, not a form: opening a submission to read it is a GET.
+                 The filters ride along so the back link from the review page
+                 returns to this exact list. */
+              %>
+              <a class="btn btn--sm" href="/grading/<%= row.id %><%= pageQuery(null) %>">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="<%= row.status === ST.NONE ? ICON.check : ICON.pen %>" />
+                </svg>
+                <%= row.status === ST.NONE ? "عرض" : "تصحيح" %>
+              </a>
+            </div>
+          </td>
+        </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+  <% } %>
+
+  <% if (orphans) { %>
+  <p class="pager">
+    <span class="pager__count">
+      <span class="num" dir="ltr"><%= orphans %></span>
+      تسليم مخفي يخص ورقة تم حذفها.
+    </span>
+  </p>
+  <% } %>
+</section>
+
+<%- include("_foot") %>

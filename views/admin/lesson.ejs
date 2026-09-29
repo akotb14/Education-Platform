@@ -70,6 +70,22 @@ for (var m2 = 0; m2 < ORDINALS.length; m2++) {
   MONTHS.push({ value: "الشهر " + ORDINALS[m2] + " الترم الثاني", term: 2 });
 }
 
+/* The same list in the shape _field.ejs emits <optgroup>s from. Built by
+   filtering `term` rather than by re-typing the months, so the select and the
+   sort order below cannot disagree about what months exist. Value and label are
+   the same string here: the month names are already Arabic, and the DB stores
+   exactly what is shown. */
+var MONTH_GROUPS = [
+  { label: "الترم الأول", items: [] },
+  { label: "الترم الثاني", items: [] }
+];
+for (var mg = 0; mg < MONTHS.length; mg++) {
+  MONTH_GROUPS[MONTHS[mg].term === 2 ? 1 : 0].items.push({
+    value: MONTHS[mg].value,
+    label: MONTHS[mg].value
+  });
+}
+
 /* Flatten to one row per unit. The old template nested two `for...of` loops
    using undeclared `i` and `j`, which makes them implicit globals — harmless
    in a template but it is the same pattern that caused the concurrency bugs in
@@ -114,11 +130,12 @@ var ICON = {
   video:
     "M4 5h11a2 2 0 0 1 2 2v2.5l5-3v11l-5-3V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z",
   trash: "M8 2h8v2h5v2H3V4h5V2Zm-3 6h14l-1 14H6L5 8Zm4 2v10h2V10H9Zm4 0v10h2V10h-2Z",
-  plus: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z",
   ok: "M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z",
   bad: "M12 2 1 21h22L12 2Zm0 6 6.5 11h-13L12 8Zm-1 3v4h2v-4h-2Zm0 5v2h2v-2h-2Z",
   file: "M5 3h11l4 4v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm0 2v14h13V8h-4V5H5Z"
 };
+/* `plus` is gone from this table: the submit button's icon now comes from
+   _form-actions.ejs, which is the only place a save or add icon is chosen. */
 %>
 
 <% if (ok) { %>
@@ -157,107 +174,61 @@ var ICON = {
     <input type="hidden" name="_csrf" value="<%= tok %>" />
     <% } %>
 
+    <%
+    /* This form was already the correct shape — it is the page the rest of the
+       dashboard was converged onto. Routing it through _field.ejs is what stops
+       it drifting back: the neutral wordings, the grade labels and the
+       Latin-run treatment on the URL are now the same object every other form
+       reads, so a change to one is a change to all of them.
+
+       The two content fields span the full width. A URL and a file row are the
+       longest values on this form, and they were sharing one row with each
+       other while the four short fields above them had a whole row each. */
+    %>
     <div class="form-grid">
-      <div class="form-field">
-        <label class="label" for="educetionlevel">
-          المادة <abbr title="مطلوب">*</abbr>
-        </label>
-        <select class="select" id="educetionlevel" name="educetionlevel" required>
-          <option value="">اختر المادة…</option>
-          <option value="biology">الأحياء</option>
-          <option value="geology">الجيولوجيا</option>
-        </select>
-      </div>
+      <%- include("_field", { fld: {
+        type: "select", name: "educetionlevel", id: "educetionlevel",
+        label: "المادة", list: "levels", required: true
+      } }) %>
 
-      <div class="form-field">
-        <label class="label" for="grade">
-          الصف <abbr title="مطلوب">*</abbr>
-        </label>
-        <select class="select" id="grade" name="grade" required>
-          <option value="">اختر الصف…</option>
-          <option value="1st">الصف الأول</option>
-          <option value="2nd">الصف الثاني</option>
-          <option value="3rd">الصف الثالث</option>
-        </select>
-      </div>
+      <%- include("_field", { fld: {
+        type: "select", name: "grade", id: "grade",
+        label: "الصف", list: "grades", required: true
+      } }) %>
 
-      <div class="form-field">
-        <label class="label" for="month">
-          الشهر <abbr title="مطلوب">*</abbr>
-        </label>
-        <select class="select" id="month" name="month" required>
-          <option value="">اختر الشهر…</option>
-          <optgroup label="الترم الأول">
-            <% for (var a = 0; a < MONTHS.length; a++) { if (MONTHS[a].term === 1) { %>
-            <option value="<%= MONTHS[a].value %>"><%= MONTHS[a].value %></option>
-            <% } } %>
-          </optgroup>
-          <optgroup label="الترم الثاني">
-            <% for (var b = 0; b < MONTHS.length; b++) { if (MONTHS[b].term === 2) { %>
-            <option value="<%= MONTHS[b].value %>"><%= MONTHS[b].value %></option>
-            <% } } %>
-          </optgroup>
-        </select>
-        <p class="field-hint">
-          أول درس في شهر جديد يفتح هذا الشهر تلقائيًا في صفحة الطالب.
-        </p>
-      </div>
+      <%- include("_field", { fld: {
+        type: "select", name: "month", id: "month", label: "الشهر",
+        list: MONTH_GROUPS, required: true,
+        hint: "أول درس في شهر جديد يفتح هذا الشهر تلقائيًا في صفحة الطالب."
+      } }) %>
 
-      <div class="form-field">
-        <label class="label" for="unit">
-          اسم الدرس <abbr title="مطلوب">*</abbr>
-        </label>
-        <input
-          class="input"
-          type="text"
-          id="unit"
-          name="unit"
-          required
-          maxlength="120"
-          autocomplete="off"
-          placeholder="مثال: الوحدة الأولى — الخلية"
-        />
-        <p class="field-hint">
-          هذا الاسم هو ما يظهر للطالب وما يُربط به الواجب والكويز، فاجعله مميزًا
-          داخل الشهر نفسه.
-        </p>
-      </div>
+      <%- include("_field", { fld: {
+        type: "text", name: "unit", id: "unit", label: "اسم الدرس",
+        required: true, maxlength: 120, autocomplete: "off",
+        placeholder: "مثال: الوحدة الأولى — الخلية",
+        hint: "هذا الاسم هو ما يظهر للطالب وما يُربط به الواجب والكويز، فاجعله مميزًا داخل الشهر نفسه."
+      } }) %>
 
-      <div class="form-field">
-        <label class="label" for="lessonLink">رابط الفيديو</label>
-        <%
-        /* dir="ltr" and the --ltr modifier: a URL is a Latin run and renders
-           with its slashes in the wrong places inside an RTL line. type="url"
-           gets the right keyboard on mobile and a free format check. */
-        %>
-        <input
-          class="input input--ltr"
-          type="url"
-          id="lessonLink"
-          name="lesson"
-          dir="ltr"
-          inputmode="url"
-          placeholder="https://…"
-          autocomplete="off"
-        />
-        <p class="field-hint">رابط المشاهدة (Streamable أو YouTube).</p>
-      </div>
+      <%
+      /* id="lessonLink", name="lesson" — the id and the submitted key differ
+         here and that is deliberate: `lesson` is what the route reads, and
+         `lessonLink` is unambiguous next to a page whose other ids are all
+         about lessons. _field.ejs keeps them independent for exactly this. */
+      %>
+      <%- include("_field", { fld: {
+        type: "url", name: "lesson", id: "lessonLink", label: "رابط الفيديو",
+        full: true, placeholder: "https://…", autocomplete: "off",
+        hint: "رابط المشاهدة (Streamable أو YouTube)."
+      } }) %>
 
-      <div class="form-field">
-        <label class="label" for="pdf">ملف PDF</label>
-        <input class="input" type="file" id="pdf" name="pdf" accept=".pdf,application/pdf" />
-        <p class="field-hint">اختياري. PDF فقط، بحد أقصى ١٠ ميجابايت.</p>
-      </div>
+      <%- include("_field", { fld: {
+        type: "file", name: "pdf", id: "pdf", label: "ملف PDF", full: true,
+        accept: ".pdf,application/pdf",
+        hint: "اختياري. PDF فقط، بحد أقصى ١٠ ميجابايت."
+      } }) %>
     </div>
 
-    <div class="form-actions">
-      <button class="btn" type="submit">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="<%= ICON.plus %>" />
-        </svg>
-        إضافة الدرس
-      </button>
-    </div>
+    <%- include("_form-actions", { act: { save: "إضافة الدرس", icon: "plus" } }) %>
   </form>
 </section>
 

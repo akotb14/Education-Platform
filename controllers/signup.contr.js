@@ -2,17 +2,33 @@ const bcrypt = require("bcrypt");
 const modelsign = require("../models/user");
 const model = require("../models/stundentOnline");
 
-const jwt = require("jsonwebtoken");
+const authToken = require("../util/authToken");
 
-/* Creates a student account. Reached by POST /addStudent (was POST /sign).
 
-   The route now runs the `valid` middleware first, so fullName/cardNumber/
-   password/confirmPassword are guaranteed present and well-formed by the time
-   this runs. The duplicate-cardNumber check below stays because uniqueness is
-   a database property, not a schema one — Ajv cannot know it. */
 const postInfo = async (req, res, next) => {
   try {
     const check = await modelsign.findOne({ cardNumber: req.body.cardNumber });
+
+    /* Login looks an account up by phoneNumber and by nothing else, so two
+       accounts sharing a number means the second one can never sign in:
+       findOne returns the first match every time, and its password is the only
+       one that will ever be accepted. The account looks fine in the dashboard,
+       which is what makes it hard to diagnose from the outside.
+
+       The schema does not prevent this — phoneNumber has no unique index, and
+       adding one to a live collection that may already hold duplicates would
+       fail to build and take the boot down with it — so it is enforced here,
+       on the only two paths that write the field. See also the same check on
+       POST /editStudent/:id. */
+    const phone = req.body.phoneNumber && String(req.body.phoneNumber).trim();
+    if (!check && phone) {
+      const dupPhone = await modelsign.findOne({ phoneNumber: phone });
+      if (dupPhone) {
+        req.flash("errorPhone", { phoneNumber: phone });
+        return res.redirect("/addStudent");
+      }
+    }
+
     if (!check) {
       let salt = await bcrypt.genSalt(10);
       const hashpassword = await bcrypt.hash(req.body.password, salt);
@@ -43,9 +59,13 @@ const postInfo = async (req, res, next) => {
     return next(err);
   }
 };
-const login = async (req, res) => {
+const login = async (req, res, next) => {
   try {
-    console.log(req.body)
+    /* `console.log(req.body)` stood here. Every single login attempt, successful
+       or not, wrote the submitted PLAINTEXT PASSWORD to the server log — and to
+       whatever collects that log. Verified against the running server: the test
+       account's password appeared in stdout verbatim. Nothing about a login body
+       is safe to log. */
     if(req.body.loginOnline != "ارسال البيانات"){
 
       const student = await modelsign.findOne({
@@ -54,17 +74,18 @@ const login = async (req, res) => {
     if (student) {
       const hash = await bcrypt.compare(req.body.password, student.password);
       if (hash) {
-        const token = jwt.sign(
-          {
-            studentCard: student._id,
-            nameStudent: student.fullName,
-            educetionlevel: student.educetionlevel,
-            grade: student.grade,
-            admin:student.admin
-          },
-          process.env.SecretPassword
-        ); 
-        res.cookie("student", token ,{ httpOnly: true });
+        /* The `admin` claim is carried for the homepage, which uses it to decide
+           whether to show the dashboard link. It is NOT what grants admin
+           access: util/aurth.js re-reads the role from the database on every
+           admin request, so this claim going stale — or being minted before a
+           demotion — cannot authorize anything. */
+        authToken.issue(res, {
+          studentCard: student._id,
+          nameStudent: student.fullName,
+          educetionlevel: student.educetionlevel,
+          grade: student.grade,
+          admin: student.admin,
+        });
         res.redirect("/");
       } else {
         /* Login looks up by phoneNumber only, so the old "cardNumber or
@@ -73,14 +94,10 @@ const login = async (req, res) => {
            was wrong tells an attacker which phone numbers are registered. */
         req.flash("loginError", "رقم الهاتف أو كلمة السر غير صحيحة");
         res.redirect("/login");
-        console.log("err1");
-
       }
     } else {
       req.flash("loginError", "رقم الهاتف أو كلمة السر غير صحيحة");
       res.redirect("/login");
-      console.log("err2");
-
     }
   }else{
     const isChec = await model.findOne({
@@ -112,8 +129,12 @@ const login = async (req, res) => {
   }
 }
   } catch (err) {
-    console.log("err"+err);
-    res.send(err);
+    /* Was `console.log("err"+err); res.send(err)`. res.send(err) serialised the
+       thrown object straight to the browser: a mongoose validation error names
+       the collection, the field and the schema rule; a connection error names
+       the database host and, in a URI, whatever credentials are in it. The
+       error handler in app.js logs it server-side and answers with a page. */
+    return next(err);
   }
 };
 const getstudent = async (req, res) => {

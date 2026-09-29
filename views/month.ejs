@@ -54,17 +54,29 @@
          SIGNED-IN student's own level and grade against each row is what stops
          a first-year student reading /biology/3rd by editing the address bar.
          That check is load-bearing — it is the only thing guarding this
-         listing — so it is preserved exactly, just hoisted. */
+         listing — so it is preserved exactly, just hoisted.
+
+         `unlockAll` is the one thing that lifts it, and only for an admin:
+         getData sets it from the admin flag on the DATABASE document, never
+         from a URL or a form field, so it cannot be turned on by a student.
+         An admin has no grade of their own to compare against — the account
+         is created without one — which is why the comparison has to be
+         skipped rather than satisfied. */
       var rows = (typeof data !== "undefined" && data) ? data : [];
       var owned = (typeof month !== "undefined" && Array.isArray(month)) ? month : [];
+      /* Deliberately NOT named `unlockAll`. EJS wraps the template in
+         with(locals), and a `var unlockAll` here would hoist a local that
+         shadows the passed-in one — so the initialiser would read its own
+         undefined declaration and the flag would always be false. */
+      var seeAll = typeof unlockAll !== "undefined" && unlockAll === true;
 
       var items = [];
       for (var r = 0; r < rows.length; r++) {
         var row = rows[r];
         if (!row) continue;
         if (!student) continue;
-        if (student.educetionlevel != row.educetionlevel) continue;
-        if (student.grade != row.grade) continue;
+        if (!seeAll && student.educetionlevel != row.educetionlevel) continue;
+        if (!seeAll && student.grade != row.grade) continue;
         var meta = readMonth(row.month);
         items.push({
           month: row.month,
@@ -76,7 +88,7 @@
              — the undefined guard ran AFTER the call that would have thrown on
              it, so it never did anything. The controller now guarantees an
              array, and this is the real check. */
-          open: owned.indexOf(row.month) !== -1
+          open: seeAll || owned.indexOf(row.month) !== -1
         });
       }
 
@@ -99,11 +111,16 @@
 
       /* Is this page actually the signed-in student's own grade? Both the
          "wrong grade" notice and the "nothing published yet" empty state used
-         to render as the same completely blank section. */
+         to render as the same completely blank section.
+
+         An admin has no grade of their own, so this could never be true for
+         them — every subject/grade page answered "this is not your grade" and
+         the tiles below it never rendered. */
       var mine =
-        !!student &&
-        String(student.educetionlevel) === String(edu) &&
-        String(student.grade) === String(grd);
+        seeAll ||
+        (!!student &&
+          String(student.educetionlevel) === String(edu) &&
+          String(student.grade) === String(grd));
 
       /* Safe to interpolate: both halves are confirmed present in the
          whitelists above before the URL is built. */
@@ -299,6 +316,23 @@
               </svg>
             </span>
             <h2 class="empty__title">لا توجد شهور متاحة بعد</h2>
+            <% if (seeAll) { %>
+            <!-- The admin reaching an empty grade is looking at their own
+                 to-do list, not a subscription problem — "تواصل مع السنتر"
+                 would be telling them to phone themselves. -->
+            <p class="empty__text">
+              لم تتم إضافة أي درس لهذا الصف حتى الآن. أضف أول درس ليظهر شهره
+              هنا تلقائيًا.
+            </p>
+            <div class="empty__actions">
+              <a class="btn btn--primary" href="/lesson" data-magnetic>
+                إضافة درس
+              </a>
+              <a class="btn btn--outline" href="/dashboard" data-magnetic>
+                لوحة التحكم
+              </a>
+            </div>
+            <% } else { %>
             <p class="empty__text">
               لم يتم رفع شهور هذا المنهج حتى الآن. تابع الصفحة الرئيسية أو تواصل
               مع السنتر لمعرفة موعد الإتاحة.
@@ -311,6 +345,7 @@
                 تواصل مع السنتر
               </a>
             </div>
+            <% } %>
           </div>
 
           <% } else { %> <% if (!openCount) { %>
