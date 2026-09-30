@@ -13,8 +13,6 @@ api/dist
 web/dist
 *.tsbuildinfo
 
-# user uploads (runtime data, not source)
-documantion/
 
 # logs
 *.log
