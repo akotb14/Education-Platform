@@ -107,7 +107,7 @@ app.use(cookieParser());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
-app.set("template engine", "ejs");
+app.set("view engine", "ejs");
 
 const isLogin = require("./util/auth");
 
