@@ -112,7 +112,7 @@ app.set("template engine", "ejs");
 const isLogin = require("./util/auth");
 
 const UPLOAD_DIRS = [
-  path.join(__dirname, "documantation"),
+  path.join(__dirname, "documentation"),
   path.join(__dirname, "images"),
 ];
 
@@ -133,7 +133,7 @@ app.use((req, res, next) => {
   if (!isUploadedFile(req.path)) return next();
   return isLogin(req, res, next);
 });
-app.use(express.static("documantation"));
+app.use(express.static("documentation"));
 app.use(express.static("images"));
 
 app.use((req, res, next) => {
