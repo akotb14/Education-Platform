@@ -49,7 +49,7 @@ function makeUploader({ destination, kind }) {
 
 module.exports = {
   uploadImage: makeUploader({ destination: "./images/", kind: "image" }),
-  uploadPdf: makeUploader({ destination: "./documantion/", kind: "pdf" }),
+  uploadPdf: makeUploader({ destination: "./documentation/", kind: "pdf" }),
   ALLOWED_EXTENSIONS,
   MAX_SIZE,
   MAX_FILES,
