@@ -1,44 +1,4 @@
 <%
-/* =========================================================================
-   SHARED ASSESSMENT FORM  —  used by homework.ejs, quiz.ejs and exam.ejs.
-
-   Those three views were ~500 identical lines each, and controllers/
-   quiz.contro.js:169 already rendered all three from ONE line:
-
-       res.render("admin/" + req.params.type + ".ejs", { data, units })
-
-   So they were three copies of one page kept in sync by hand, and they had
-   already drifted: exam.ejs dropped the month and unit selects (correctly —
-   exams are not attached to a unit), quiz.ejs grew a quizTime box that
-   homework.ejs lacks, and homework.ejs's <select name="educetionlevel"> had a
-   placeholder <option name="grade"> copy-pasted from the control below it.
-   One file now; `kind` selects the differences.
-
-   THE BUG THIS FIXES
-
-   The unit <select> used to carry only the unit NAME — its option value
-   interpolated `j.unit` and nothing else — while the subject, grade and month
-   came from three SEPARATE controls. But
-   controllers/quiz.contro.js:14-19 only attaches the paper when all four match
-   an existing unit row. Pick "biology/1st/الخلية" in the unit list and leave
-   the month select on a different month and checkUnit is null — addQuiz then
-   falls through every branch, saves nothing, and redirects to a blank form.
-   No error, no message: the admin believes the paper was created.
-
-   The option now carries the unit row's own identity, `docId:rowId`, and the
-   subject / grade / month are derived server-side from that row. A mismatch is
-   no longer expressible, and the three redundant selects are gone.
-
-   LOCALS
-     kind       "homework" | "quiz" | "exam"
-     data       Array of existing papers of this kind
-     units      Array of unit documents (empty/ignored for exam)
-     csrfToken  String
-     flashOk / flashBad  String
-     formData   Object | "" — the rejected submission, echoed back so a
-                validation error does not wipe a form with 20 questions in it.
-                See "STICKY FORM" below.
-   ====================================================================== */
 
 var KIND = typeof kind !== "undefined" && kind ? String(kind) : "homework";
 var papers = typeof data !== "undefined" && Array.isArray(data) ? data : [];
@@ -47,18 +7,6 @@ var tok = typeof csrfToken !== "undefined" && csrfToken ? csrfToken : "";
 var ok = typeof flashOk !== "undefined" && flashOk ? String(flashOk) : "";
 var bad = typeof flashBad !== "undefined" && flashBad ? String(flashBad) : "";
 
-/* STICKY FORM.
-   Every validation failure in addQuiz ends in a redirect, which is correct
-   (post/redirect/get — a refresh must not resubmit). The cost is that the
-   browser renders a blank form afterwards. That was survivable when the form
-   held one question; with a batch of twenty it means retyping all of them
-   because one choice was left empty. addQuiz now stashes the submission and
-   getQuiz hands it back here.
-
-   File inputs are deliberately not restored: a browser will not let a page set
-   the value of <input type=file>, so any attempt would silently produce a
-   question whose image the admin believes is attached and is not. The form
-   says so instead. */
 var prior =
   typeof formData !== "undefined" && formData && typeof formData === "object"
     ? formData
@@ -66,18 +14,10 @@ var prior =
 var priorQuestions =
   Array.isArray(prior.questions) && prior.questions.length ? prior.questions : [];
 
-/* The value to put in a top-level field: what was submitted, or empty. */
 function was(key) {
   return prior[key] === undefined || prior[key] === null ? "" : String(prior[key]);
 }
 
-/* Per-kind copy and behaviour. `unitBound` is the real distinction: homework
-   and quiz hang off a unit row, an exam does not.
-
-   `editHref` and `questionsHref` are two different destinations on purpose.
-   Edit opens the paper's own fields only (name, description, window, duration);
-   questions are added, reordered, edited and deleted on the questions page. A
-   row therefore offers both, and neither one can reach the other's data. */
 var META = {
   homework: {
     label: "واجب",
@@ -128,19 +68,6 @@ var GRADES = {
   "3rd": "الصف الثالث"
 };
 
-/* Unit options grouped by subject / grade / month, so a long list is
-   navigable. Rows that already carry a paper of THIS kind are marked and
-   disabled: addQuiz refuses them (it only fills an empty quizId / homeId), and
-   the old form offered them anyway and then silently did nothing.
-
-   Built in the shape _field.ejs consumes — { label, items:[{ value, label,
-   disabled }] } — so the optgroup markup is emitted once, in the partial,
-   instead of being retyped here and again in _edit-paper.ejs. The "already
-   linked" note is folded into the label rather than appended in the template:
-   an <option> holds text, not markup, so a suffix is part of the label whatever
-   it looks like in source. `taken` is kept alongside `disabled` because
-   freeCount below counts on it, and the two mean different things — one is why,
-   the other is the effect. */
 var unitGroups = [];
 var seen = {};
 for (var d = 0; d < unitDocs.length; d++) {
@@ -241,31 +168,10 @@ var ICON = {
     <% } %>
 
     <%
-    /* The four top fields, through _field.ejs. What was hand-written here and
-       hand-written again in _edit-paper.ejs is now one call each, which is how
-       the two pages stop disagreeing: the edit form had lost `input--ltr`,
-       `dir="ltr"` and `required` on these very time fields.
-
-       nameQuiz spans the full width on all three kinds. It is the paper's
-       title — the thing the admin is naming — and a title beside a dropdown
-       reads as an afterthought. The short paired fields (subject+grade,
-       opens+closes) keep their two-up rows, and the duration takes the narrow
-       width because "00:30" needs five characters, not half a card. */
     %>
     <div class="form-grid">
       <% if (M.unitBound) { %>
       <%
-      /* ONE control instead of four. The value is docId:rowId, so the subject,
-         grade, month and unit name are all read from that row on the server and
-         cannot disagree with each other.
-
-         `unknown: false`: for every other select, echoing back a stored value
-         that is not in the list is the safe thing to do. Here the value is an
-         opaque pair of ObjectIds, so surfacing it would put
-         "aaaa…01:bbbb…02 (قيمة غير معروفة)" in front of the admin, which tells
-         them nothing they can act on. If a sticky value no longer matches a
-         free row, the honest state is "nothing selected" — the row was taken or
-         deleted, and picking again is the only way forward. */
       %>
       <%- include("_field", { fld: {
         type: "select", name: "unitRef", id: "unitRef", label: "الدرس",
@@ -295,12 +201,6 @@ var ICON = {
       } }) %>
 
       <%
-      /* Optional, and offered here as well as on the edit page on purpose: a
-         field that can only ever be filled in by creating the paper and then
-         going back to edit it is a field most papers will never have. Capped at
-         500 to match MAX_DESCRIPTION in quiz.contro.js, which REJECTS an
-         over-long value rather than truncating it — so the browser limit and
-         the server limit have to be the same number. */
       %>
       <%- include("_field", { fld: {
         type: "textarea", name: "description", id: "description",
@@ -324,12 +224,6 @@ var ICON = {
 
       <% if (M.hasDueDate) { %>
       <%
-      /* Homework only, and deliberately NOT the same thing as endTime. endTime
-         means "the window shuts and the paper locks"; a homework due date is a
-         date the student is told about. routes/homework.router.js reports
-         homework as state:"untimed" with no opensAt/closesAt, and making this
-         gate access would change what students can open — so it is recorded and
-         shown, and nothing else. */
       %>
       <%- include("_field", { fld: {
         type: "datetime-local", name: "dueDate", id: "dueDate",
@@ -340,14 +234,6 @@ var ICON = {
 
       <% if (M.hasDuration) { %>
       <%
-      /* Stored and parsed as "HH:MM" — see allowanceSeconds() in
-         quiz.contro.js. The old box shipped with value="hh:mm" as its DEFAULT
-         VALUE, not a placeholder, so submitting the form untouched saved the
-         literal string "hh:mm"; allowanceSeconds then parsed NaN and the paper
-         ended up untimed with no indication why.
-
-         hintHtml, not hint: the example time has to be wrapped in dir="ltr" or
-         the bidi algorithm moves it around inside the Arabic sentence. */
       %>
       <%- include("_field", { fld: {
         type: "text", name: "quizTime", id: "quizTime", label: "مدة الحل",
@@ -360,22 +246,6 @@ var ICON = {
     </div>
 
     <%
-    /* ---------------------------------------------------- the questions ---
-
-       WAS: one question, hardcoded, with a manual "رقم السؤال" select going
-       up to 30. Everything past the first question had to be added one at a
-       time from the edit page — a separate form, a separate round trip each.
-
-       The manual number select is gone. It let the admin pick any number for
-       any question, including one already used, while the student paper reads
-       questions by array position and ignores `no` entirely; the two could
-       disagree and the select was the only thing that looked authoritative.
-       Position in this list is the number now, and it is renumbered on screen
-       as blocks are added and removed.
-
-       Without JS this renders as a plain form with one question, which still
-       submits and still saves — the add button is the only thing that needs
-       scripting, and CSS hides it unless the `js` class is on <html>. */
     var blocks = priorQuestions.length ? priorQuestions : [null];
     %>
     <div class="qbuilder" data-qbuilder data-max="50">
@@ -413,10 +283,6 @@ var ICON = {
       </div>
 
       <%
-      /* The blueprint admin.js clones. Inside <template> the markup is inert:
-         the browser does not run its `required` validation and does not submit
-         its fields, so this costs nothing until a question is actually added.
-         "__I__" is replaced with the next free index on clone. */
       %>
       <template data-qtemplate>
         <%- include("_question-block", { i: "__I__", pos: "", q: null }) %>
@@ -426,15 +292,6 @@ var ICON = {
     <p class="qbuilder__live sr-only" role="status" aria-live="polite" data-qlive></p>
 
     <%
-    /* The badge and the note both belong to the button, so both go through the
-       partial. `badge` is what admin.js keeps in step with the question count —
-       it writes every [data-qcount] in the form — and putting the number on the
-       control the admin is about to press is the whole point of it: "حفظ الكويز
-       3" says what is being saved.
-
-       `icon: "plus"` because this creates a paper rather than saving edits to
-       one; _edit-paper.ejs uses the default save icon. Same partial, and the
-       difference between the two actions stays visible. */
     %>
     <%- include("_form-actions", { act: {
       save: "حفظ الـ" + M.label, icon: "plus", badge: blocks.length,
@@ -501,11 +358,6 @@ var ICON = {
 
           <td>
             <%
-            /* The old table had a "type" column printing the literal string
-               "homework" on the homework page, "quiz" on the quiz page — the
-               same value in every row of a page that is already filtered by
-               it. Replaced with the question count, which is the number an
-               admin actually needs and which the page never showed. */
             %>
             <span class="num" dir="ltr">
               <%= Array.isArray(it.quiz) ? it.quiz.length : 0 %>
@@ -524,13 +376,6 @@ var ICON = {
 
           <td>
             <%
-            /* Two destinations, not one. "تعديل" opens the paper's own fields
-               (name, description, window, duration) and cannot touch a question;
-               "الأسئلة" opens the page where questions are added, reordered,
-               edited and deleted. Splitting the row action is what makes the
-               split visible — before this, "تعديل" was the only way in and it
-               put the question builder in front of an admin who only wanted to
-               fix a typo in the title. */
             %>
             <div class="row-actions">
               <a class="btn btn--ghost btn--sm" href="<%= M.editHref %><%= it._id %>">

@@ -1,6 +1,4 @@
 <%
-/* Nav key and page title depend on :type, so both are computed before the
-   shell include rather than passed as literals. */
 var TYPE = typeof type !== "undefined" && type ? String(type) : "quiz";
 var KINDS = {
   quiz: { label: "الكويزات", one: "الكويز", key: "deg-quiz" },
@@ -8,69 +6,10 @@ var KINDS = {
   exam: { label: "الامتحانات", one: "الامتحان", key: "deg-exam" }
 };
 var K = KINDS[TYPE] || KINDS.quiz;
-/* Snap TYPE back to a whitelisted key after the lookup. TYPE is not only a
-   label — it goes into this page's own form action and into every delete
-   action, so an unrecognised :type would otherwise be echoed into URLs the
-   page tells the browser to submit to. The route 404s on an unknown type
-   already; this keeps the view self-consistent on its own. */
 if (!KINDS[TYPE]) TYPE = "quiz";
 %>
 <%- include("_head", { active: K.key, title: "درجات " + K.label }) %>
 <%
-/* =========================================================================
-   STUDENT DEGREES — one table of attempts for /showStudentsDegree/:type.
-
-   WHAT THE OLD PAGE DID
-     · Loaded the retired dashboard theme with "../admin/dashboard/assets/…".
-       That relative path only resolves from a ONE-segment URL; this page is
-       served at /showStudentsDegree/quiz, where the browser resolved it to
-       /showStudentsDegree/admin/dashboard/… — a 404. Both stylesheets and the
-       menu script failed on every load, so the page rendered as an unstyled
-       table with a dead sidebar toggle. It was never actually seen styled.
-     · Repeated the 13-item sidebar inline, in English, inside <html lang="en">
-       on an Arabic RTL platform, and titled every page "Uesrs".
-     · Put the whole page INSIDE .topbar — the filter form, the heading and the
-       table were all nested in the header bar.
-     · Delete was a GET link: /removestudentDegree/:type/:id behind an <a>. A
-       crawler, a prefetch or a mis-click wiped a student's result, with no
-       confirmation, no CSRF and — on that route alone — no isAdmin either, so
-       it was reachable by anyone who knew the URL. It is a POST form now and
-       the route is guarded; see routes/exam.router.js.
-     · Built "Grade&Specialization" by concatenating `grade + " &"`. A bare & in
-       text is an invalid entity start, and an attempt whose student had no
-       grade printed the literal string "undefined".
-     · The group <select> had no <label>, was sized with inline width/height,
-       and its `disabled selected hidden` placeholder had value="All" — so
-       after filtering by Monday the control snapped back to "Select Group"
-       and nothing on the page said which filter was live.
-     · Printed `totalDegree/quiz.length` unconditionally. totalDegree is null
-       for an attempt that was opened but never submitted, and EJS renders null
-       as the empty string, so those rows read "/10" — indistinguishable from a
-       genuine zero. They are marked "لم يُسلّم" here.
-
-   HOW THE FILTERS BEHAVE
-   All four controls filter the STUDENT, not the paper — group, subject and
-   grade are attributes of the person, and that is what an admin is narrowing
-   by when they ask "how did Monday's group do". The route resolves matching
-   student ids first and queries `student: {$in: ids}`, so `data` now contains
-   exactly the matching attempts. It previously used populate({match}), which
-   does NOT drop a non-matching row — it nulls .student on it — so the null
-   skip below is kept as a guard for attempts whose student was deleted.
-
-   LOCALS
-     data       Array   attempts, each populated with .quiz and .student
-     type       String  "quiz" | "homework" | "exam"
-     group      String  active group filter, "" for none               (optional)
-     csrfToken  String  required by the delete forms                   (optional)
-     f, GROUPS, GRADES, SUBJECTS, SORTS, GROUP_LABEL, GRADE_LABEL,
-     SUBJECT_LABEL, qs — the shared filter locals from
-     util/tableFilters.viewLocals(), passed straight to _table-toolbar.ejs
-     autoGradableCount  Function  from util/questionTypes.viewLocals();
-                        the score denominator                      (optional)
-     totalsOf, GSTATUS, GSTATUS_LABELS  from util/grading.viewLocals();
-                        the manual marks, the combined total and the derived
-                        marking status                             (optional)
-   ====================================================================== */
 
 var attempts = typeof data !== "undefined" && Array.isArray(data) ? data : [];
 var token = typeof csrfToken !== "undefined" && csrfToken ? csrfToken : "";
@@ -80,38 +19,15 @@ var FS =
     ? f
     : { group: "", grade: "", level: "", sort: "", q: "", active: false, touched: false };
 
-/* Label maps arrive as locals now — they used to be redeclared identically
-   here, in users.ejs and in onlinestudent.ejs. */
 var GRADE_MAP = typeof GRADE_LABEL !== "undefined" && GRADE_LABEL ? GRADE_LABEL : {};
 var SUBJECT_MAP = typeof SUBJECT_LABEL !== "undefined" && SUBJECT_LABEL ? SUBJECT_LABEL : {};
 var GROUP_MAP = typeof GROUP_LABEL !== "undefined" && GROUP_LABEL ? GROUP_LABEL : {};
 
-/* One pass, so the markup below is plain iteration and the summary counts
-   agree with the rows actually rendered.
-
-   Two skips, for different reasons:
-     student == null  the group filter excluded them (see the note above)
-     quiz    == null  the paper was deleted. The delete routes clean these up
-                      now, so only rows predating that fix reach here — but
-                      rendering one would throw on quiz.nameQuiz. */
-/* The "out of". Comes from the shared helper so essay questions — which no
-   machine marks — are not counted in the denominator: a student who got all
-   four auto-marked questions right on a five-question paper with one essay
-   would otherwise read 4/5, i.e. one wrong rather than one unmarked.
-
-   Guarded, like every other local: this view is also rendered by routes that
-   pre-date the helper. The fallback is the old expression exactly, and for a
-   paper with no essay questions the two agree anyway. */
 var COUNT_GRADABLE =
   typeof autoGradableCount !== "undefined" && typeof autoGradableCount === "function"
     ? autoGradableCount
     : function (p) { return p && Array.isArray(p.quiz) ? p.quiz.length : 0; };
 
-/* The marking status and the combined total, from the one module that defines
-   them. Same guard-and-fallback shape as COUNT_GRADABLE above: this view is
-   also reached by callers that pre-date the helper, and the fallback is the
-   old behaviour exactly — no manual marks, nothing to mark, so the score cell
-   renders the auto-score alone as it always did. */
 var ST =
   typeof GSTATUS !== "undefined" && GSTATUS
     ? GSTATUS
@@ -143,9 +59,6 @@ for (var a = 0; a < attempts.length; a++) {
 
   var totalQ = COUNT_GRADABLE(it.quiz);
   var t = TOTALS(it.quiz, it);
-  /* totalDegree is a String in the schema and null until the paper is handed
-     in. `== null` catches both null and undefined; a submitted zero is 0 and
-     must NOT be treated as unsubmitted. */
   var submitted = it.totalDegree != null && it.totalDegree !== "";
   var score = submitted ? Number(it.totalDegree) : null;
   if (score != null && !isFinite(score)) score = null;
@@ -165,26 +78,16 @@ for (var a = 0; a < attempts.length; a++) {
     paper: it.quiz.nameQuiz || "—",
     pGrade: it.quiz.grade || "",
     pSubject: it.quiz.educetionlevel || "",
-    /* The row's own type, not the URL's. They always agree today; using the
-       row's keeps the delete action correct if that ever stops being true. */
     pType: it.quiz.type || TYPE,
     submitted: submitted,
     score: score,
     totalQ: totalQ,
     pct: pct,
-    /* The manual half, and the two combined. `final` is derived — the database
-       stores the auto-score and the manual marks separately and never their
-       sum — so a row can never show a total that disagrees with its parts. */
     manual: t.manual,
     manualOutOf: t.manualOutOf,
     final: t.final,
     finalOutOf: t.finalOutOf,
     pending: t.pending,
-    /* DERIVED, not the `needsReview` flag. That flag is written once at submit
-       time and never cleared, so a row marked last week would still be
-       claiming "بانتظار التصحيح" today. statusOf/totalsOf recompute from the
-       paper's essay questions against the stored marks, so this cell is
-       current no matter what the flag says. */
     status: t.status
   });
 }
@@ -197,9 +100,6 @@ var avg = scored.length
 
 var filtering = !!FS.active;
 
-/* One human-readable summary of the active filters, for the row count and the
-   empty state. Only the set ones are listed, so a single group filter reads
-   "مجموعة الاثنين" exactly as it did before the other three were added. */
 var filterBits = [];
 if (FS.group) filterBits.push("مجموعة " + (GROUP_MAP[FS.group] || FS.group));
 if (FS.level) filterBits.push(SUBJECT_MAP[FS.level] || FS.level);
@@ -218,9 +118,6 @@ var ICON = {
 %>
 
 <%
-/* The shared toolbar. TYPE is already snapped back to a whitelisted key above,
-   so it is safe in the form action; :type is a path segment here rather than a
-   query parameter, which is why there is no `hidden` for it. */
 %>
 <%- include("_table-toolbar", { action: "/showStudentsDegree/" + TYPE, search: true }) %>
 
@@ -255,9 +152,6 @@ var ICON = {
       </span>
       <span>
         <%
-        /* Averages the PERCENTAGES, not the raw marks. Papers in one list can
-           have different question counts, so averaging raw scores would weight
-           a 30-question exam the same as a 5-question quiz. */
         %>
         <span class="stat__value num" dir="ltr"><%= avg == null ? "—" : avg + "%" %></span>
         <span class="stat__label">متوسط النتيجة</span>
@@ -336,9 +230,6 @@ var ICON = {
 
           <td>
             <%
-            /* Two separate elements, not "grade & subject" concatenated. The
-               old string built an unescaped bare & — an invalid entity start —
-               and printed "undefined" whenever either half was missing. */
             %>
             <% if (row.sGrade) { %>
             <span class="tag"><%= GRADE_MAP[row.sGrade] || row.sGrade %></span>
@@ -364,26 +255,10 @@ var ICON = {
           <td>
             <% if (!row.submitted) { %>
             <%
-            /* Opened but never handed in. The old page rendered this as "/10"
-               — EJS prints null as "" — which read as a zero. */
             %>
             <span class="badge">لم يُسلّم</span>
             <% } else { %>
             <%
-            /* WHICH MARK THIS CELL SHOWS.
-               A paper with no essay questions has nothing manual about it, so
-               it shows the auto-score out of the auto denominator, exactly as
-               before this feature. A paper with essays shows the COMBINED
-               total — auto plus what the teacher awarded — which is the mark
-               the request calls final, and which only means anything once the
-               marking is done. Until then the pending count sits beside it, so
-               the number is never read as a finished result.
-
-               The percentage decides the colour, and the fraction is shown
-               beside it: 6/10 and 30/50 are both 60%, and the admin needs the
-               raw marks as well as the comparison. Never colour alone — the
-               numbers carry the same information for a greyscale print or a
-               colour-blind reader. */
             var hasManual = row.manualOutOf > 0;
             var shown = hasManual ? row.final : row.score;
             var shownOf = hasManual ? row.finalOutOf : row.totalQ;
@@ -407,9 +282,6 @@ var ICON = {
 
           <td>
             <%
-            /* Only a submitted paper has a marking status; an unopened one is
-               a dash rather than "لا يحتاج تصحيحًا", which would read as a
-               judgement about a paper nobody has handed in. */
             %>
             <% if (!row.submitted) { %>—<% } else { %>
             <span class="badge<%= BADGE[row.status] || "" %>">
@@ -421,13 +293,6 @@ var ICON = {
           <td>
             <div class="row-actions">
               <%
-              /* Into the review page for this one attempt. Rendered only for a
-                 submitted paper — there is nothing to read on an attempt that
-                 was never handed in — and it is a link because opening a
-                 submission is a GET.
-
-                 The label follows the work: a paper with no essay questions is
-                 already fully marked, so its link says "عرض". */
               %>
               <% if (row.submitted) { %>
               <a class="btn btn--sm" href="/grading/<%= row.id %>">
@@ -439,9 +304,6 @@ var ICON = {
               <% } %>
 
               <%
-              /* POST, not a GET link — see the header note. data-confirm is
-                 read by admin.js; with JS unavailable the delete still works,
-                 it just asks nothing first. */
               %>
               <form
                 method="post"
@@ -453,10 +315,6 @@ var ICON = {
                 <% } %>
                 <% if (FS.touched) { %>
                 <%
-                /* Sends the admin back to the exact list they were reading —
-                   all four filters and the sort, not just the group — instead
-                   of dropping them into the unfiltered one. The route rebuilds
-                   the querystring from these; see the redirect there. */
                 %>
                 <input type="hidden" name="group" value="<%= FS.group %>" />
                 <input type="hidden" name="educetionlevel" value="<%= FS.level %>" />

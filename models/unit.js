@@ -33,11 +33,6 @@ module.exports = class Units {
   }
 
   static async addlesson(educetionlevel, grade, month, unit, lesson, pdf) {
-    /* No try/catch here on purpose. It used to swallow every failure into a
-       console.log and return normally, so the caller could not tell a saved
-       lesson from a failed one — the controller flashed "تمت الإضافة" and
-       redirected to a list the lesson was not in. Errors now reach
-       units.contro.addlesson, which passes them to next(err). */
     const checkMonth = await model.findOne({
       educetionlevel: educetionlevel,
       grade: grade,

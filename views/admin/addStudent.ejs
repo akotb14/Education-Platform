@@ -1,55 +1,5 @@
 <%- include("_head", { active: "addstudent", title: "إضافة طالب" }) %>
 <%
-/* =========================================================================
-   ADD STUDENT — CREATE A PLATFORM ACCOUNT
-
-   WHAT THE OLD PAGE DID (sign.ejs, 283 lines)
-     · Was a 283-line TemplateMo dashboard theme with a copy-pasted 110-line
-       sidebar, `lang="en"`, no dir, and `title>Category`.
-     · Loaded `../admin/dashboard/assets/css/style.css` and
-       `../admin/signup/style.css` via relative URLs, both of which only
-       resolve because the page was served at the root `/sign` — if the route
-       had been `/admin/sign` both stylesheets would 404.
-     · Had an `isAdmin` select with `id="grade"` (a duplicate of the real
-       grade select's id) and `value="false" disabled selected hidden` — so
-       the placeholder hid the current value and re-submitted it on every save.
-     · Imported but never mounted the `valid` middleware: signup.router.js:3
-       `const valid = require(...)` but the POST route at L36 is
-       `router.post("/sign", csrfProtect, isAdmin, contro.postInfo)` — `valid`
-       never appears. So the form has zero server-side validation today.
-     · The validator schema at util/validSignup.js requires `confirmPassword`
-       but the form has no such field, so mounting `valid` as-is would reject
-       every submission as missing a required key.
-     · A rejected submission redirects to `/sign` with a blank form, so the
-       admin retypes all 7 fields to fix one. No `req.flash()` of the
-       submitted values and no repopulation.
-     · onlinestudent.ejs already links here with
-       `?fullName=..&cardNumber=..&phoneNumber=..&grade=..&group=..` so an
-       admin can turn a join request into an account in one click. The page
-       currently ignores those query parameters, and the admin retypes all
-       five fields by hand.
-
-   LOCALS (all guarded)
-     csrfToken       string   from req.csrfToken()
-     validator       array    flash("errorMsg") from the middleware (Ajv errors)
-     check           object   flash("errorCard") when the cardNumber is taken
-     student         array    from getstudent() — unused here; present only for
-                              routes/signup.router.js backward compat if other
-                              code references `student` in the same render call
-     flashOk         string   flash("addOk") success message after save
-     prefill         object   { fullName, cardNumber, phoneNumber, grade, group,
-                              educetionlevel } extracted from req.query so the
-                              "إضافة كطالب" link from onlinestudent.ejs can
-                              pre-fill all five fields
-
-   SECURITY: password field is type="password" (never echoed back into an input
-   on error), and the CSRF token is always present.
-
-   NOTE: this page does NOT set `month` on create — that field is only for
-   editStudent. postInfo in signup.contr.js omits it, so every new account gets
-   `month: undefined` and editStudent.ejs shows zero checkboxes ticked until an
-   admin manually selects them. That is existing behaviour left unchanged.
-   ====================================================================== */
 
 var tok = typeof csrfToken !== "undefined" && csrfToken ? csrfToken : "";
 var errs = typeof validator !== "undefined" && Array.isArray(validator) ? validator : [];
@@ -62,14 +12,7 @@ if (typeof prefill !== "undefined" && prefill && typeof prefill === "object") {
   pre = prefill;
 }
 
-/* The option lists that used to be declared here — LEVELS, GRADES, GROUPS —
-   now live in _field.ejs as presets, because this page and editStudent.ejs
-   each held their own copy of all three and the grade labels had already
-   forked between them. The DB values are English and the labels Arabic; that
-   pairing is a contract with the schema, and it is now stated once. */
 
-/* Find the Ajv error for a given path. Ajv sets `err.instancePath` to
-   "/fullName", "/cardNumber", etc. */
 var findErr = function (path) {
   for (var i = 0; i < errs.length; i++) {
     if (errs[i].instancePath === path) return errs[i];
@@ -82,24 +25,11 @@ var cardErr = findErr("/cardNumber");
 var passErr = findErr("/password");
 var confirmErr = findErr("/confirmPassword");
 
-/* Two sources for one field's error: the schema's own message, and the
-   duplicate-card check the controller does against the database. They cannot
-   both be shown, so the schema message wins — a malformed number has to be
-   fixed before "already taken" could even be true. */
 var cardMsg = cardErr ? cardErr.message : dupeCard ? "رقم الكارت مُستخدَم بالفعل." : "";
 
-/* The schema reports confirmPassword as a generic type error, which tells the
-   admin nothing. The only way it fails is a mismatch. */
 var confirmMsg = confirmErr ? "كلمتا السر غير متطابقتين." : "";
 
-/* The phone number is not marked required and has no schema rule, but it is the
-   field login resolves an account by, so a duplicate makes one of the two
-   accounts unable to sign in. The controller rejects it; this is where the
-   admin gets told which field to change. */
 var phoneMsg = dupePhone ? "رقم الهاتف مُستخدَم بالفعل لحساب آخر." : "";
-/* The rejected value is echoed back so the admin can see and correct the number
-   the message is about; the rest of the form still clears on a rejection, which
-   is existing behaviour noted at the top of this file. */
 var phoneValue = dupePhone && dupePhone.phoneNumber
   ? dupePhone.phoneNumber
   : pre.phoneNumber;
@@ -121,17 +51,6 @@ var phoneValue = dupePhone && dupePhone.phoneNumber
     <input type="hidden" name="_csrf" value="<%= tok %>" />
 
     <%
-    /* Every field is the same include. What used to be 140 lines of hand-typed
-       markup here is now nine calls, which is the point: the name of a field
-       and the shape of a field are different things, and only the first of
-       them belongs on this page.
-
-       The rows are grouped rather than incidental — who the student is, then
-       where they are placed and what they may see, then their credentials — and
-       editStudent.ejs now emits the same nine fields in the same order, so the
-       two pages read as one form in two states. The name spans the full width
-       because a full Arabic name is the longest value on the form; it used to be
-       squeezed into half a row here while editStudent gave it the whole width. */
     %>
     <div class="form-grid">
       <%- include("_field", { fld: {
@@ -177,8 +96,6 @@ var phoneValue = dupePhone && dupePhone.phoneNumber
       } }) %>
 
       <%
-      /* No `value` on either password field, by design: _field.ejs refuses to
-         echo a password back into an input even when handed one. */
       %>
       <%- include("_field", { fld: {
         type: "password", name: "password", id: "password", label: "كلمة السر",
@@ -193,8 +110,6 @@ var phoneValue = dupePhone && dupePhone.phoneNumber
     </div>
 
     <%
-    /* "حفظ" here and "حفظ التعديلات" on the edit page were the same action
-       under two names. One name per action, through the whole flow. */
     %>
     <%- include("_form-actions", { act: { cancel: "/student" } }) %>
   </form>

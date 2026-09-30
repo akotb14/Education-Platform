@@ -1,55 +1,7 @@
 <%
-/* =========================================================================
-   SHARED TABLE TOOLBAR — four filters, a sort, and an Excel export.
-
-   Included by users.ejs, showStudDegree.ejs and onlinestudent.ejs. Before
-   this partial, users.ejs and showStudDegree.ejs each carried their own
-   hand-written group <select> and onlinestudent.ejs had no controls at all.
-
-   LOCALS (all optional — read behind typeof guards, because EJS compiles with
-   with(locals) and an unguarded miss throws ReferenceError, not undefined)
-
-     action    String  form target, e.g. "/student". Required in practice.
-     f         Object  parsed filter state from util/tableFilters.parse()
-     GROUPS    Array   [{value,label}] — from tableFilters.viewLocals()
-     GRADES    Array   ditto
-     SUBJECTS  Array   ditto
-     SORTS     Array   ditto, includes the "" default-order entry
-     qs        Fn      tableFilters.toQuery — builds the export/clear links
-     search    Bool    render the free-text box (only /student has one today)
-     hidden    Object  extra fields to carry through the GET form, e.g. a
-                       page-scoped id. Values are emitted as hidden inputs,
-                       AND folded into the export link — a hidden field is
-                       part of the submitted state, so an export that dropped
-                       it would not be the table on screen. Never name one
-                       after a facet that also has a visible control: two
-                       controls with one `name` submit the key twice, and a
-                       repeated key parses as an array, which every whitelist
-                       here rejects.
-     selects   Array   extra facets this page has beyond the shared four:
-                       [{id, name, label, list:[{value,label}], current,
-                       allLabel}]. Rendered by the same tbSelect as the
-                       standard ones, just before the sort control, so a page
-                       with its own filters keeps ONE form and one submit.
-                       Their `current` values are folded into the export link
-                       too, so a page never needs to restate them as `hidden`.
-                       /grading uses it for assessment type and status.
-     extra     String  raw HTML for an extra action button ("إضافة طالب")
-
-   WHY THE EXPORT IS AN <a>, NOT A SUBMIT BUTTON
-   A <button> inside this form would export whatever is half-selected in the
-   dropdowns right now. The brief is "export the records currently shown", so
-   the link is built from the APPLIED state in `f` — it matches the table the
-   admin is looking at, not the controls they have started fiddling with.
-   It points at the same route with &export=xlsx, so the export runs through
-   the identical filter and sort code as the render; there is no second query
-   builder that could drift out of step.
-   ====================================================================== */
 
 var TB_ACTION = typeof action !== "undefined" && action ? String(action) : "";
 
-/* An empty, inert state so a caller that forgets `f` renders a blank toolbar
-   instead of throwing. */
 var TB_F =
   typeof f !== "undefined" && f && typeof f === "object"
     ? f
@@ -65,8 +17,6 @@ var TB_HIDDEN = typeof hidden !== "undefined" && hidden && typeof hidden === "ob
 var TB_SELECTS = typeof selects !== "undefined" && Array.isArray(selects) ? selects : [];
 var TB_EXTRA = typeof extra !== "undefined" && extra ? extra : "";
 
-/* Without `qs` the export link cannot be built, so the button is dropped
-   rather than pointing at an unfiltered export. */
 var TB_QS = typeof qs === "function" ? qs : null;
 
 var TB_ICON = {
@@ -74,15 +24,6 @@ var TB_ICON = {
   excel: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm-1 7V3.5L18.5 9H13ZM8 12h1.8l1.2 2 1.2-2H14l-2 3.2 2 3.3h-1.8l-1.2-2.1-1.2 2.1H8l2-3.3L8 12Z"
 };
 
-/* Renders one <select>. The value/label split is deliberate: `value` is the
-   English string MongoDB stores, the text node is the Arabic label. The
-   active option carries `selected`, so the closed control names the filter
-   that is actually applied — the old placeholder-based markup snapped back to
-   "Select Group" after filtering, leaving nothing on the page to say which
-   filter was live.
-
-   `allLabel` of null means the list already supplies its own neutral entry;
-   that is the sort list, whose "" option reads "الترتيب الافتراضي". */
 function tbSelect(id, name, label, list, current, allLabel) {
 %>
 <div class="toolbar__field">
@@ -102,9 +43,6 @@ function tbSelect(id, name, label, list, current, allLabel) {
 
 <form class="toolbar" method="get" action="<%= TB_ACTION %>">
   <%
-  /* Carried through so filtering does not drop a path-scoped parameter the
-     page needs. Emitted before the visible fields; order is irrelevant to the
-     server and these have no UI. */
   if (TB_HIDDEN) {
     for (var hk in TB_HIDDEN) {
       if (!Object.prototype.hasOwnProperty.call(TB_HIDDEN, hk)) continue;
@@ -132,9 +70,6 @@ function tbSelect(id, name, label, list, current, allLabel) {
   <% tbSelect("educetionlevel", "educetionlevel", "المادة", TB_SUBJECTS, TB_F.level, "كل المواد"); %>
   <% tbSelect("grade", "grade", "الصف", TB_GRADES, TB_F.grade, "كل الصفوف"); %>
   <%
-  /* This page's own facets, if it has any. Emitted before the sort control so
-     the ordering reads filters-then-order, and through the same tbSelect so
-     they cannot look or behave differently from the shared four. */
   for (var s = 0; s < TB_SELECTS.length; s++) {
     var sel = TB_SELECTS[s] || {};
     tbSelect(
@@ -159,24 +94,6 @@ function tbSelect(id, name, label, list, current, allLabel) {
 
     <% if (TB_QS) { %>
     <%
-    /* `download` is advisory only — the server sends Content-Disposition
-       attachment regardless, so the file downloads even if the attribute is
-       ignored. It is here so a middle-click behaves too.
-
-       The hidden fields and this page's own `selects` are folded in: both are
-       part of what this form submits, so an export without them would be a
-       different set of rows than the one on screen — which is exactly what
-       this link promises not to be. `export` is assigned last so a caller
-       cannot override it.
-
-       Folding `selects` in here is what lets a page with extra facets stop
-       ALSO declaring them as `hidden` fields. /grading used to do exactly
-       that, and it broke the two controls it was trying to preserve: the
-       hidden input and the select carried the same `name`, so submitting sent
-       the key twice, Express's querystring parser turned it into an array,
-       and the route's whitelist — which requires a string — read the filter as
-       unset. Changing or clearing the type filter silently cleared it. A facet
-       belongs in exactly one control; the export link is this partial's job. */
     var TB_EXPORT_QS = {};
     if (TB_HIDDEN) {
       for (var ek in TB_HIDDEN) {
@@ -186,7 +103,7 @@ function tbSelect(id, name, label, list, current, allLabel) {
     }
     for (var xs = 0; xs < TB_SELECTS.length; xs++) {
       var xsel = TB_SELECTS[xs] || {};
-      if (!xsel.name || !xsel.current) continue;   /* toQuery skips empties too */
+      if (!xsel.name || !xsel.current) continue;
       TB_EXPORT_QS[xsel.name] = xsel.current;
     }
     TB_EXPORT_QS.export = "xlsx";

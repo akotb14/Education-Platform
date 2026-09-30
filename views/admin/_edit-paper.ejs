@@ -1,75 +1,4 @@
 <%
-/* =========================================================================
-   ONE PAPER'S SETTINGS — shared by edithomework.ejs, editquiz.ejs and
-   editexam.ejs, exactly as _assessment-form.ejs is shared by the three add
-   pages. The three edit views were ~400 near-identical lines each and had
-   already drifted: only editexam carried start/end time, only editquiz
-   carried quizTime, and all three offered a subject select whose values
-   ("Secondary" / "Preparatory") match nothing in the database.
-
-   THIS PAGE NO LONGER TOUCHES QUESTIONS, AND THAT IS THE POINT.
-
-   It used to be one form that did both, which made the common job the
-   expensive one: an admin who wanted to fix a typo in a quiz's name opened a
-   page led by a question builder, scrolled past an empty question block, and
-   pressed a save button carrying a question count. Nothing was lost by doing
-   that — an empty block is skipped — but the page never said so, and "am I
-   about to add a blank question?" is not a question a rename should raise.
-
-   The questions moved to their own page, _manage-questions.ejs, reached from
-   the "إدارة الأسئلة" button below and from the list. This form is the
-   paper's own fields and a count. Its handler, editPaperPost, does not read a
-   question, does not call parseQuestions and has no $push — so renaming a
-   paper cannot delete, recreate or re-submit its questions.
-
-   Two consequences worth knowing about:
-     · No `enctype`. With the builder gone there is no file input, so the form
-       posts as ordinary urlencoded and the route dropped its upload.any().
-     · No `.qbuilder`, no `<template data-qtemplate>`, no [data-qadd]. admin.js
-       binds the builder by [data-qbuilder] and finds none here, which is the
-       correct outcome and not a regression; the hooks all live on the
-       questions page now.
-
-   WHICH FIELDS EACH KIND SHOWS
-   Quiz and homework: the name, a description, the lesson it is attached to,
-   and their one timing field — a duration for a quiz, a due date for a
-   homework. The subject and grade selects are gone from BOTH: a paper's
-   subject and grade are read off the unit document the chosen lesson lives
-   in, so the two can no longer disagree. Setting a paper to biology/3rd while
-   its lesson sat under geology/1st used to be one careless save away, and the
-   result was a paper that no list would show.
-
-   Exam has no lesson to derive anything from, so it keeps the subject and
-   grade selects, plus its start/end window and its per-attempt duration.
-
-   LOCALS
-     kind        "homework" | "quiz" | "exam"
-     data        the paper
-     question    its existing questions (array). Read for `.length` ONLY —
-                 the count on the "إدارة الأسئلة" button. Nothing on this page
-                 renders a question.
-     units       unit documents, for the lesson picker. [] for exam
-     currentUnit "docId:rowId" of the row pointing at this paper, or ""
-     csrfToken   string
-     flashOk / flashBad  strings, may be ""
-     formData    a rejected submission to redisplay, or ""
-
-   The question-type locals this file used to need (QTYPES, QTYPE_LABELS and
-   the rest of util/questionTypes.viewLocals()) are gone with the builder, and
-   editPaperGet deliberately stopped passing them: a local in scope reads as
-   "this page deals in question types", which is the invitation that produced
-   the combined form in the first place.
-
-   ALL LOCALS ARE READ BEHIND A typeof GUARD. This was the only admin view
-   that read `kind`, `data`, `question`, `units`, `currentUnit`, `csrfToken`,
-   `flashOk` and `flashBad` bare, and EJS compiles the template body inside
-   `with(locals)`: a key the route did not pass is a ReferenceError, not
-   undefined. That matters more here than it looks, because a render error is
-   thrown from inside res.render's callback — the route's try/catch has already
-   returned by then, so Express serves its own 500 and the admin loses the form
-   with no message about why. One route that forgets one local takes the whole
-   page down; a guard makes it degrade to an empty field instead.
-   ====================================================================== */
 
 var KIND = typeof kind !== "undefined" && kind ? String(kind) : "homework";
 var paper = typeof data !== "undefined" && data && typeof data === "object" ? data : {};
@@ -84,8 +13,6 @@ var PLURAL = { homework: "الواجبات", quiz: "الكويزات", exam: "ا
 var LIST_HREF = "/admin/" + KIND;
 var EDIT_HREF = { homework: "/editHomework", quiz: "/editQuiz", exam: "/editExam" }[KIND] || "/editHomework";
 
-/* The other half of the split. One href, used by the header button and by the
-   empty state, so there is one route name to keep in step with the routers. */
 var QUESTIONS_HREF = {
   homework: "/questionsOfHomework",
   quiz: "/questionsOfQuiz",
@@ -95,11 +22,6 @@ var QUESTIONS_HREF = {
 var isExam = KIND === "exam";
 var isHomework = KIND === "homework";
 
-/* A rejected submission comes back through flash. Every failure path
-   redirects — correct, so a refresh cannot resubmit — but a redirect renders a
-   blank form, and blanking a description because the name was left empty is
-   not a usable way to work. Falls back to the stored paper when there is
-   nothing to restore. */
 var prior = typeof formData !== "undefined" && formData && typeof formData === "object" ? formData : null;
 
 function was(key, fallback) {
@@ -109,29 +31,11 @@ function was(key, fallback) {
   return fallback === undefined || fallback === null ? "" : String(fallback);
 }
 
-/* The count, and nothing more. `question` is the array of stored questions and
-   this page reads exactly one thing from it. */
 var existing = typeof question !== "undefined" && Array.isArray(question) ? question : [];
 
-/* Only exam reads these. Quiz and homework take their subject and grade from
-   the unit document the chosen lesson lives in — see editPaperPost. */
 var curSubject = was("educetionlevel", paper.educetionlevel);
 var curGrade = was("grade", paper.grade);
 
-/* ------------------------------------------- the lesson placement picker ---
-   Unit rows grouped by subject / grade / month so a long list is navigable.
-   Rows already pointing at a DIFFERENT paper are disabled: editPaperPost
-   refuses them, and offering them anyway is how a save appeared to work and
-   changed nothing.
-
-   Built up here, in the shape _field.ejs consumes, rather than in the template
-   body where it used to sit. The add form builds the same list the same way,
-   and the two were the pair that drifted the furthest — this one had lost
-   `input--ltr`, `dir="ltr"` and `required` on the time fields and carried the
-   short grade labels the rest of the dashboard had already dropped.
-
-   The "(مشغول)" note is folded into the label because an <option> holds text,
-   not markup — a suffix is part of the label however it is written in source. */
 var PLACE_SUBJECTS = { biology: "الأحياء", geology: "الجيولوجيا" };
 var PLACE_GRADES = { "1st": "الصف الأول", "2nd": "الصف الثاني", "3rd": "الصف الثالث" };
 
@@ -166,13 +70,8 @@ for (var d = 0; d < unitDocs.length; d++) {
   }
 }
 
-/* currentUnit is the row this paper is already attached to; a rejected
-   submission's choice wins over it. */
 var priorUnit = prior ? was("unitPlacement", curUnit) : curUnit;
 
-/* Both paths are the ones _manage-questions.ejs uses for the same two tabs.
-   They have to match: the bar renders on both halves, so an icon that differs
-   between them makes the two tabs look like four. */
 var ICON = {
   info: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm2 16H8v-2h8v2Zm0-4H8v-2h8v2Zm-3-5V3.5L18.5 9H13Z",
   list: "M4 6h2v2H4V6Zm4 0h12v2H8V6ZM4 11h2v2H4v-2Zm4 0h12v2H8v-2ZM4 16h2v2H4v-2Zm4 0h12v2H8v-2Z"
@@ -180,12 +79,6 @@ var ICON = {
 %>
 
 <%
-/* Class names are the ones _assessment-form.ejs already uses, because
-   admin.css already styles those. This partial originally invented a
-   parallel set — .notice, .card, .card__title, .empty, .btn--primary — none
-   of which exist in the stylesheet, so the whole page rendered as unstyled
-   flow content: full-bleed text, no card, no spacing, no responsive grid.
-   .crumbs and .split-nav below are the only genuinely new components. */
 %>
 <% if (ok) { %>
 <p class="flash flash--ok" role="status"><%= ok %></p>
@@ -195,13 +88,6 @@ var ICON = {
 <% } %>
 
 <%
-/* The crumbs are the same shape as every other detail page — link, separator,
-   the thing you are looking at. They used to be a single link prefixed with
-   `&#8592;` (←), which points the wrong way on an RTL page: "back" runs
-   rightwards here, so the arrow sent the eye away from the link it belonged to.
-   Dropping it rather than mirroring it is the better fix — the trail already
-   says where you are, and an arrow that has to be reasoned about is one job too
-   many for a separator. */
 %>
 <nav class="crumbs" aria-label="مسار التنقل">
   <a href="<%= LIST_HREF %>">كل <%= PLURAL %></a>
@@ -210,17 +96,6 @@ var ICON = {
 </nav>
 
 <%
-/* THE SPLIT, STATED ON THE PAGE. Two jobs, and the admin is on one of them.
-
-   This bar is deliberately above the form rather than tucked into the actions
-   row at the bottom: someone who came here to work on the questions needs to
-   find that out before filling anything in, not after saving. The current page
-   is marked with aria-current and is not a link — a link to where you already
-   are is a dead end that reads as a choice.
-
-   The count is the whole reason the `question` local is still passed. It is
-   orientation, not content: "this paper has 12 questions" tells the admin
-   whether the other page is worth opening. */
 %>
 <nav class="split-nav" aria-label="تعديل <%= LABEL %>">
   <span class="split-nav__item is-current" aria-current="page">
@@ -246,19 +121,11 @@ var ICON = {
   </p>
 
   <%
-  /* No enctype. There is no file input on this form any more, so it posts as
-     ordinary urlencoded — which is also why the route dropped upload.any() and
-     csrfProtect went back to running first. */
   %>
   <form method="post" action="<%= EDIT_HREF %>/<%= paper._id %>">
     <input type="hidden" name="_csrf" value="<%= tok %>" />
 
     <%
-    /* The same includes the add form uses, in the same order, which is the
-       point of the exercise: this page and _assessment-form.ejs are two states
-       of one form and every difference between them below is now deliberate
-       and visible in one screen of code, instead of spread over 150 lines of
-       markup that had to be compared by eye. */
     %>
     <div class="form-grid">
       <%- include("_field", { fld: {
@@ -268,16 +135,6 @@ var ICON = {
       } }) %>
 
       <%
-      /* PAPER-level free text: what it covers, how to approach it, what to
-         revise first. Optional, and empty on every paper created before the
-         field existed — which is why the controller writes it only when it is
-         posted, and never invents one.
-
-         maxlength matches MAX_DESCRIPTION in the controller, so the browser
-         stops at the same number the server rejects at. The server rejects
-         rather than truncating: a form-driven save can never reach the limit,
-         so anything that does is a hand-built POST, and silently rewriting one
-         into something the admin never typed is the worse failure. */
       %>
       <%- include("_field", { fld: {
         type: "textarea", name: "description", id: "description",
@@ -288,20 +145,6 @@ var ICON = {
 
       <% if (isExam) { %>
       <%
-      /* Exam only. An exam belongs to no lesson, so there is nothing to derive
-         its subject and grade from and they have to be picked here.
-
-         The values are biology / geology, from _field.ejs's presets. The old
-         select offered "Secondary" and "Preparatory" — which are grade stages,
-         not subjects, and match no paper, no student and no query. Saving the
-         form without touching this field rewrote the paper's subject to a value
-         nothing looks for, and it vanished from the student lists.
-
-         Both selects now carry the neutral option they lacked. Without one, a
-         paper whose stored value is not in the list rendered with the FIRST
-         option selected and no indication of it, and the next save wrote that
-         over the real value; _field.ejs surfaces the stray value instead, and
-         `required` stops the form until a real one is chosen. */
       %>
       <%- include("_field", { fld: {
         type: "select", name: "educetionlevel", id: "educetionlevel",
@@ -316,17 +159,6 @@ var ICON = {
 
       <% if (!isExam) { %>
       <%
-      /* `neutral` is spelled out here instead of taking the default
-         "اختر الدرس المرتبط…", because on this one select the empty option is
-         not "you have not chosen yet" — it is a real choice that detaches the
-         paper from its lesson. It needs to say so. (The wording it replaces,
-         "— بدون —", was one of five different spellings of the empty option
-         across the dashboard, and the only one that meant something.)
-
-         `unknown: false`: the value is an opaque docId:rowId pair, so echoing
-         back a stale one would show the admin two dozen hex characters and a
-         label telling them it is unrecognised. "Not attached" is the honest
-         reading of a placement that no longer exists. */
       %>
       <%- include("_field", { fld: {
         type: "select", name: "unitPlacement", id: "unitPlacement",
@@ -338,15 +170,6 @@ var ICON = {
 
       <% if (isExam) { %>
       <%
-      /* `required`, matching the add form. An exam is defined by when it opens
-         and closes — that is the whole difference between an exam and a
-         homework here — and the add form has always demanded both. This page
-         did not, so an exam could be saved with an empty window from the edit
-         side only, and an exam with no window is one no student can be shown at
-         the right time. A legacy exam missing a window now has to be given one
-         before other edits can be saved, which is the intended consequence:
-         the form asks for the thing that was always required and never
-         enforced. */
       %>
       <%- include("_field", { fld: {
         type: "datetime-local", name: "startTime", id: "startTime",
@@ -363,17 +186,6 @@ var ICON = {
 
       <% if (isHomework) { %>
       <%
-      /* Homework only, and INFORMATIONAL. It is recorded and displayed; it does
-         not lock anything. routes/homework.router.js deliberately reports every
-         homework as state "untimed" with opensAt/closesAt null, and a due date
-         that silently started closing homework would change what students can
-         open — a bigger decision than "add a field to the edit form", and one
-         that would have been made by accident if this had been stored in
-         `endTime` instead. It has its own field for exactly that reason: see
-         the comment on dueDate in models/quiz.js.
-
-         Not required: a homework without a due date is the normal case and was
-         the only case until this field existed. */
       %>
       <%- include("_field", { fld: {
         type: "datetime-local", name: "dueDate", id: "dueDate",
@@ -385,27 +197,6 @@ var ICON = {
 
       <% if (!isHomework) { %>
       <%
-      /* Duration — a quiz's time limit, an exam's per-attempt allowance. The
-         same field on the document (quizTime) and the same control on both
-         forms, which is why this branch is "not homework" rather than two
-         copies; homework has no duration at all.
-
-         THIS FIELD WAS MISSING FROM THE QUIZ EDIT FORM, and the reason is worth
-         keeping: cleanQuizTime(undefined) returns "", so writing the duration
-         unconditionally untimed every quiz that was saved from a form not
-         carrying the field. The fix at the time was to stop writing it, which
-         made it uneditable — settable when a quiz was created and never again.
-         editPaperPost now guards on `typeof req.body.quizTime === "string"`, so
-         posted-and-empty clears it and absent leaves it alone, and the field can
-         come back.
-
-         NOT required, deliberately: the add form leaves it optional and says so
-         in its hint. Requiring it here would invent a new add/edit difference
-         while closing an old one.
-
-         placeholder, not value. The old field shipped value="hh:mm" as its
-         DEFAULT, so an untouched form stored the literal string "hh:mm", the
-         duration parsed as NaN and the paper was silently untimed. */
       %>
       <%- include("_field", { fld: {
         type: "text", name: "quizTime", id: "quizTime", label: "مدة " + LABEL,
@@ -418,19 +209,6 @@ var ICON = {
     </div>
 
     <%
-    /* "حفظ" here, "حفظ" on addStudent and "حفظ التعديلات" on editStudent were
-       one action under three names. The shared default, "حفظ التغييرات", is
-       what every save on the dashboard says now; the add pages pass their own
-       "إضافة …" because creating a thing genuinely is a different action.
-
-       NO `badge`. The badge is the question builder's [data-qcount] pill, and
-       there is no builder on this page — a count on this save button would be
-       claiming that pressing it does something to the questions, which is the
-       exact confusion the split removes. The note says the opposite out loud.
-
-       The cancel link was "رجوع" pointing at the list. It is "إلغاء" now, the
-       same word as everywhere else, and the crumbs above are what "back" means
-       on this page. */
     %>
     <%- include("_form-actions", { act: {
       cancel: LIST_HREF,

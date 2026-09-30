@@ -6,16 +6,6 @@
     <meta name="theme-color" content="#fe3f40" />
 
     <%
-      /* =====================================================================
-         Display vocabulary.
-
-         edu and grd come straight off the URL, so they are attacker-controlled.
-         They are never echoed — they are looked up in these maps and only the
-         mapped Arabic label reaches the page. An unknown value falls back to a
-         generic label instead of being reflected, which keeps the page free of
-         reflected-XSS surface even though EJS would already escape it.
-         The same whitelist is what makes it safe to build a URL out of the
-         student's own level/grade further down. */
       var SUBJECTS = { biology: "الأحياء", geology: "الجيولوجيا" };
       var GRADES = {
         "1st": "الصف الأول الثانوي",
@@ -26,9 +16,6 @@
       var subjectName = SUBJECTS[edu] || "المنهج";
       var gradeName = GRADES[grd] || "";
 
-      /* The exact ten strings the admin form writes (views/admin/lesson.ejs).
-         Anything outside this list still renders — it just sorts last and
-         shows no number rather than being dropped. */
       var ORDINALS = [
         "الاول", "الثاني", "الثالث", "الرابع", "الخامس",
         "السادس", "السابع", "الثامن", "التاسع", "العاشر"
@@ -46,28 +33,8 @@
         return { term: term, idx: idx };
       }
 
-      /* --------------------------------------------------------------------
-         The old template filtered inside three nested loops. Same predicates,
-         evaluated once each here so the markup below is plain iteration.
-
-         `data` is already queried by the edu/grd in the URL, so comparing the
-         SIGNED-IN student's own level and grade against each row is what stops
-         a first-year student reading /biology/3rd by editing the address bar.
-         That check is load-bearing — it is the only thing guarding this
-         listing — so it is preserved exactly, just hoisted.
-
-         `unlockAll` is the one thing that lifts it, and only for an admin:
-         getData sets it from the admin flag on the DATABASE document, never
-         from a URL or a form field, so it cannot be turned on by a student.
-         An admin has no grade of their own to compare against — the account
-         is created without one — which is why the comparison has to be
-         skipped rather than satisfied. */
       var rows = (typeof data !== "undefined" && data) ? data : [];
       var owned = (typeof month !== "undefined" && Array.isArray(month)) ? month : [];
-      /* Deliberately NOT named `unlockAll`. EJS wraps the template in
-         with(locals), and a `var unlockAll` here would hoist a local that
-         shadows the passed-in one — so the initialiser would read its own
-         undefined declaration and the flag would always be false. */
       var seeAll = typeof unlockAll !== "undefined" && unlockAll === true;
 
       var items = [];
@@ -84,17 +51,10 @@
           grade: row.grade,
           term: meta.term,
           idx: meta.idx,
-          /* The old condition was `month.includes(i.month) && month != undefined`
-             — the undefined guard ran AFTER the call that would have thrown on
-             it, so it never did anything. The controller now guarantees an
-             array, and this is the real check. */
           open: seeAll || owned.indexOf(row.month) !== -1
         });
       }
 
-      /* Mongo returns insertion order, which is arbitrary — months routinely
-         came out shuffled. Sort by term, then by position in ORDINALS, with
-         unrecognised names last (sort is stable, so they keep their order). */
       items.sort(function (a, b) {
         if (a.term !== b.term) return a.term - b.term;
         var ai = a.idx < 0 ? 99 : a.idx;
@@ -109,21 +69,12 @@
 
       var openCount = items.filter(function (m) { return m.open; }).length;
 
-      /* Is this page actually the signed-in student's own grade? Both the
-         "wrong grade" notice and the "nothing published yet" empty state used
-         to render as the same completely blank section.
-
-         An admin has no grade of their own, so this could never be true for
-         them — every subject/grade page answered "this is not your grade" and
-         the tiles below it never rendered. */
       var mine =
         seeAll ||
         (!!student &&
           String(student.educetionlevel) === String(edu) &&
           String(student.grade) === String(grd));
 
-      /* Safe to interpolate: both halves are confirmed present in the
-         whitelists above before the URL is built. */
       var myHref =
         student && SUBJECTS[student.educetionlevel] && GRADES[student.grade]
           ? "/" + student.educetionlevel + "/" + student.grade
@@ -140,7 +91,6 @@
       name="description"
       content="شهور منهج <%= subjectName %> المتاحة<%= gradeName ? " — " + gradeName : "" %> على منصة أ/ مرڤت عبدالرحمن."
     />
-    <!-- Per-student content behind a login — keep it out of search results. -->
     <meta name="robots" content="noindex, nofollow" />
 
     <title>
@@ -150,10 +100,6 @@
 
     <link rel="icon" type="image/png" href="/assets/images/logo.png" />
 
-    <!-- Set before the stylesheets so .reveal elements never flash visible.
-         CSS keeps content visible unless this class is present, so a JS
-         failure leaves a readable page rather than a blank one — the inverse
-         of the WOW.js behaviour this replaces. -->
     <script>
       document.documentElement.classList.add("js");
     </script>
@@ -165,10 +111,6 @@
       rel="stylesheet"
     />
 
-    <!-- home.css carries the header, footer, card, contact and reveal
-         components this page reuses; listing.css adds the page hero, tiles and
-         empty states shared with the units page. Every visitor reaches this
-         route from a homepage card, so both files are already cached. -->
     <link rel="stylesheet" href="/assets/css/tokens.css" />
     <link rel="stylesheet" href="/assets/css/home.css" />
     <link rel="stylesheet" href="/assets/css/listing.css" />
@@ -204,10 +146,6 @@
 
         <nav class="site-nav" id="site-nav" aria-label="التنقل الرئيسي">
           <ul class="site-nav__list">
-            <!-- Root-relative, not bare "#courses": those sections live on the
-                 homepage, not here. home.js only wires up links whose href
-                 STARTS with "#", so these are left alone rather than being
-                 handed to the scrollspy. -->
             <li><a class="site-nav__link" href="/#courses">الصفوف</a></li>
             <li><a class="site-nav__link" href="/#activities">الاختبارات</a></li>
             <li><a class="site-nav__link" href="/#contact">تواصل</a></li>
@@ -234,7 +172,6 @@
     </header>
 
     <main id="main">
-      <!-- ======================================================= page hero -->
       <section class="page-hero">
         <div class="container page-hero__inner">
           <nav class="crumbs" aria-label="مسار التصفح">
@@ -249,8 +186,6 @@
             </ol>
           </nav>
 
-          <!-- The page had no h1 at all; the old heading was an <h2> whose
-               data-title read "Ready for any thing" in English. -->
           <h1 class="page-hero__title">
             شهور منهج <em><%= subjectName %></em>
           </h1>
@@ -264,7 +199,6 @@
             <% } %>
           </p>
 
-          <!-- edu/grd never printed raw — these are the mapped labels. -->
           <div class="meta-row">
             <% if (gradeName) { %>
             <span class="chip">
@@ -288,12 +222,9 @@
         </div>
       </section>
 
-      <!-- ========================================================== months -->
       <section class="section">
         <div class="container">
           <% if (!mine) { %>
-          <!-- Reached by editing the URL to another level or grade. The old
-               page rendered an empty section with no explanation here. -->
           <div class="notice">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z" />
@@ -308,7 +239,6 @@
           </div>
 
           <% } else if (!items.length) { %>
-          <!-- No months published for this grade yet. -->
           <div class="empty">
             <span class="empty__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="currentColor">
@@ -317,9 +247,6 @@
             </span>
             <h2 class="empty__title">لا توجد شهور متاحة بعد</h2>
             <% if (seeAll) { %>
-            <!-- The admin reaching an empty grade is looking at their own
-                 to-do list, not a subscription problem — "تواصل مع السنتر"
-                 would be telling them to phone themselves. -->
             <p class="empty__text">
               لم تتم إضافة أي درس لهذا الصف حتى الآن. أضف أول درس ليظهر شهره
               هنا تلقائيًا.
@@ -349,9 +276,6 @@
           </div>
 
           <% } else { %> <% if (!openCount) { %>
-          <!-- Months exist but none are unlocked. Previously the single most
-               common blank-page case: the loop matched nothing and the student
-               saw a heading over empty space with no idea why. -->
           <div class="notice">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z" />
@@ -374,10 +298,6 @@
               <% for (var k = 0; k < term.list.length; k++) { var m = term.list[k]; %>
               <div class="card-stage reveal">
                 <% if (m.open) { %>
-                <!-- encodeURIComponent, not the bare value: month names are
-                     Arabic and contain spaces, so they have to be percent-
-                     encoded to survive the path. Express decodes :month back
-                     before isMonth compares it. -->
                 <a
                   class="card tile"
                   href="/lessons/<%= encodeURIComponent(m.educetionlevel) %>/<%= encodeURIComponent(m.grade) %>/<%= encodeURIComponent(m.month) %>"
@@ -396,10 +316,6 @@
                 </a>
 
                 <% } else { %>
-                <!-- Deliberately not an <a>. /lessons/... is guarded by
-                     isMonth, which answers a bare 404 for any month the
-                     student does not own, so a link here would be a link to a
-                     guaranteed dead end. No href means no tab stop either. -->
                 <div class="card tile tile--locked">
                   <span class="tile__num" aria-hidden="true">
                     <span><%= m.idx >= 0 ? m.idx + 1 : "•" %></span>
@@ -424,7 +340,6 @@
         </div>
       </section>
 
-      <!-- ========================================================= contact -->
       <section class="section section--alt grain" id="contact">
         <span
           class="blob blob--2 parallax"
@@ -443,12 +358,6 @@
                 من خارج السويس يرجى الحجز من خلال الأرقام:
               </p>
 
-              <!-- The old markup was a single href="#" holding
-                   "01093172264📲01066038495". Two Latin digit runs separated by
-                   a neutral character inside an RTL paragraph swap visual
-                   order, so that line rendered the second number first — and
-                   neither one dialled. Each number is now its own isolated LTR
-                   tel: link. -->
               <div class="contact__phones">
                 <a class="phone" dir="ltr" href="tel:+201093172264" data-magnetic>
                   <svg
@@ -510,8 +419,6 @@
               </div>
             </div>
 
-            <!-- The old markup wrapped this image in <form action="" method="post">
-                 with no inputs at all — an empty POST target around decoration. -->
             <div class="contact__art parallax reveal" data-speed="0.09">
               <img
                 src="/assets/images/students.png"

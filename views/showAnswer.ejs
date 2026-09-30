@@ -6,68 +6,16 @@
     <meta name="theme-color" content="#fe3f40" />
 
     <%
-      /* =====================================================================
-         ANSWER KEY — rendered by routes/showAnswer.router.js
-             GET /showAnswer/:id   with { data, score, outOf, kind, backHref }
-
-         ACCESS. This page prints every correct answer, and until now the route
-         checked nothing beyond "is this cookie a valid JWT". Any logged-in
-         student could read the key for any quiz on the platform, in any grade,
-         including one they had not sat and one still inside its exam window —
-         verified live against a running server. The route now requires a
-         submitted degreeQuiz record for this student and this quiz, so the key
-         is only reachable after their own attempt is graded.
-
-         LOCALS
-           data      the quiz document; `quiz` holds the questions
-           score     this student's total, or null
-           outOf     number of AUTO-MARKED questions the score was out of, or
-                     null — essay questions are not in it
-           needsReview  true when this attempt still has an essay answer
-                     waiting for a teacher. The route DERIVES this with
-                     grading.statusOf rather than reading the stored
-                     needsReview flag, which is written once at submit time
-                     and never cleared                              (optional)
-           attempt   this student's own degreeQuiz document, for the per-
-                     question marks and feedback                    (optional)
-           kind      "quiz" | "exam" | "homework"
-           backHref  where the back link goes
-           QTYPES / typeOf — from util/questionTypes.viewLocals()   (optional)
-           reviewRows / totalsOf — from util/grading.viewLocals()   (optional)
-
-         All read behind typeof guards: under EJS's `with(locals)` an
-         unguarded reference to a key that was never passed is a ReferenceError,
-         and render errors bypass the route's own try/catch — Express hands them
-         to its error handler, so the student gets a bare 500. */
 
       var kindRaw = typeof kind !== "undefined" && kind ? String(kind) : "quiz";
       var KINDS = { quiz: "الكويز", exam: "الامتحان", homework: "الواجب" };
       var kindName = KINDS[kindRaw] || KINDS.quiz;
 
-      /* The type whitelist, with the same inline fallback every other view
-         carrying question types uses — this page is also rendered by the 404
-         and 403 branches, which pass no question locals at all. */
       var QT = typeof QTYPES !== "undefined" && QTYPES ? QTYPES : ["mcq", "truefalse", "explain"];
 
       var doc = (typeof data !== "undefined" && data && typeof data === "object") ? data : null;
       var title = doc && doc.nameQuiz ? String(doc.nameQuiz) : "";
 
-      /* WHAT THE TEACHER AWARDED, per question.
-
-         reviewRows() is the same join the admin review page renders from, so
-         the mark a student reads here and the mark the teacher typed there can
-         never be assembled two different ways. It keys on the question's INDEX
-         in the paper, not on position in the stored array: writtenAnswers is
-         sparse — a row exists only from the moment there is something to store
-         — so walking it in order would attach the wrong feedback to the wrong
-         question the first time a student left an essay blank.
-
-         Guarded like every other local. This template is also rendered by the
-         404 and 403 branches, which pass no grading locals at all, and under
-         EJS's `with(locals)` an unguarded reference to a key that was never
-         passed is a ReferenceError rather than undefined. With the helper
-         absent the map stays empty and every essay renders exactly as it did
-         before marking existed. */
       var att =
         typeof attempt !== "undefined" && attempt && typeof attempt === "object" ? attempt : null;
       var MARKS = {};
@@ -84,13 +32,6 @@
         var q = all[i];
         if (!q) continue;
 
-        /* The old template did `for (j of data['quiz'][i].answer[0])` with no
-           guard at all. The admin add-question handler stores
-           answer: [req.body.answer], so a question saved with no options at
-           all holds [undefined] — and `for..of undefined` throws
-           "answer[0] is not iterable" mid-render, taking down the whole page
-           rather than the one question. Reproduced against the real template
-           before rewriting. */
         var opts = [];
         var raw = q.answer && Array.isArray(q.answer) ? q.answer[0] : null;
         if (raw && typeof raw.length === "number") {
@@ -102,22 +43,11 @@
 
         var correct = q.correctAnswer == null ? "" : String(q.correctAnswer).trim();
 
-        /* Uploaded question images land in ./images/ (middlewares/upload.js),
-           mounted at the root by app.js, so the file is served at /<filename>.
-
-           The old code was image.split('\\')[1] || image.split('/')[1] — the
-           SECOND segment rather than the last, so any path deeper than one
-           level rendered src="/". */
         var img = q.image ? String(q.image).trim() : "";
         var imgName = img ? img.split(/[\\/]/).pop() : "";
 
-        /* A question with no qType at all is every question saved before this
-           feature existed — read as mcq, which is what they all are. */
         var qType = QT.indexOf(q.qType) !== -1 ? q.qType : "mcq";
 
-        /* The teacher's mark for THIS question, or null when it has not been
-           marked (or when this render carries no attempt — the 403/404
-           branches, and any future caller that passes only the paper). */
         var mk = qType === "explain" ? MARKS[i] || null : null;
 
         rows.push({
@@ -125,32 +55,14 @@
           options: opts,
           correct: correct,
           type: qType,
-          /* Teacher-facing model answer, essay questions only. Optional at
-             creation time, so frequently empty. */
           model: q.modelAnswer == null ? "" : String(q.modelAnswer).trim(),
-          /* The key is worth nothing if the correct answer is not among the
-             options — that happens when an option was edited after the fact,
-             and the old page just silently showed no highlight.
-
-             An essay question has NO options and NO correct answer by design,
-             so it can never be an orphan. Without this the warning would fire
-             on every essay question and tell the student to "راجع السنتر"
-             about a question that is working exactly as intended. */
           orphan: qType !== "explain" && correct !== "" && opts.indexOf(correct) === -1,
           img: imgName ? "/" + encodeURIComponent(imgName) : "",
 
-          /* Essay questions only. `graded` is false until a teacher stores a
-             mark, and ZERO IS A MARK — testing the score for truthiness here
-             would hide a legitimately-awarded 0 behind "بانتظار التصحيح" and
-             leave the student waiting for a mark they had already been
-             given. reviewRows has already resolved that distinction. */
           graded: !!(mk && mk.graded),
           score: mk && mk.graded ? mk.score : null,
           maxScore: mk ? mk.maxScore : null,
           feedback: mk && mk.feedback ? mk.feedback : "",
-          /* What the student themself wrote, shown back to them so the mark
-             and the feedback are read against the answer they gave rather
-             than against memory. */
           written: mk && mk.text ? mk.text : ""
         });
       }
@@ -158,30 +70,9 @@
       var sc = typeof score !== "undefined" && score != null && String(score) !== "" ? Number(score) : null;
       if (sc !== null && isNaN(sc)) sc = null;
 
-      /* The denominator counts only auto-marked questions, so ZERO is a real
-         and meaningful value: a paper made entirely of essay questions has
-         nothing the server could mark. The old fallback treated `<= 0` as
-         "missing" and substituted the question count, which would print
-         "درجتك 0 من 5" on such a paper — a student reading that has been told
-         they scored nothing, when in fact nothing has been marked yet.
-         Falling back only on an absent or unparseable value. */
       var of_ = typeof outOf !== "undefined" && outOf != null ? Number(outOf) : NaN;
       if (isNaN(of_) || of_ < 0) of_ = rows.length;
 
-      /* THE COMBINED RESULT. `score` and `outOf` are, and stay, the machine's
-         marks out of the machine-markable questions — that pair is what every
-         other screen on the platform means by a score, and widening it here
-         would make this page disagree with the lists the student came from.
-         The essay marks are added on top, derived, never stored as one number.
-
-            auto   what the server marked at submit time
-            manual what a teacher has since awarded
-            final  auto + manual, out of everything the paper is worth
-
-         Shown as the final pair ONLY once every essay has been marked. While
-         any are outstanding, final/finalOutOf would read as a finished result
-         with marks lost on the unmarked questions, so the auto pair keeps the
-         floor and the notice below explains what is not in it. */
       var T = doc && att && typeof totalsOf === "function" ? totalsOf(doc, att) : null;
       var hasManual = !!(T && T.manualOutOf > 0);
       var allMarked = !!(T && T.pending === 0 && T.final != null);
@@ -190,30 +81,16 @@
       var shown = showFinal ? T.final : sc;
       var shownOf = showFinal ? T.finalOutOf : of_;
 
-      /* Under half is flagged in red, matching .hw-card__score--low. */
       var low = shown !== null && shownOf > 0 && shown / shownOf < 0.5;
 
-      /* An essay answer is still with the teacher. The route derives this from
-         the paper and the stored marks rather than from the `needsReview` flag,
-         which is written once at submit time and never cleared — read straight,
-         it would still be telling a student their essays are unmarked weeks
-         after they were marked. */
       var awaiting = typeof needsReview !== "undefined" && !!needsReview;
 
-      /* Some essays marked, some not: the wording has to differ from "none of
-         them yet", because part of what is on screen IS a teacher's mark. */
       var partly = !!(T && T.pending > 0 && T.pending < T.essays);
 
-      /* Nothing on this paper was machine-marked and nothing has been awarded
-         by hand either, so there is no score to show at all — only the
-         "waiting to be marked" note. */
       var showScore = shown !== null && shownOf > 0;
 
       var exitHref = typeof backHref !== "undefined" && backHref ? String(backHref) : "/";
 
-      /* Set by the route when the student has no submitted attempt for this
-         paper, so the empty state can say why rather than implying the key is
-         missing. */
       var locked = typeof isLocked !== "undefined" && !!isLocked;
     %>
 
@@ -240,9 +117,6 @@
     <link rel="stylesheet" href="/assets/css/listing.css" />
     <link rel="stylesheet" href="/assets/css/quiz.css" />
 
-    <!-- No quiz.js here: nothing on this page is timed or submittable. The old
-         page loaded "../../show answer/script.js" — a zero-byte file, at a path
-         with an unencoded space in it, two directories above the mount root. -->
     <script src="/assets/js/home.js" defer></script>
   </head>
 
@@ -304,9 +178,6 @@
             </ol>
           </nav>
 
-          <!-- The old heading was inline-styled with `position: center` — not a
-               value `position` accepts, so it was dropped, along with the
-               `left`/`top` offsets that depended on it. -->
           <h1 class="page-hero__title"><em>نموذج الإجابة</em></h1>
 
           <% if (title) { %>
@@ -322,10 +193,6 @@
             </span>
 
             <% if (showScore) { %>
-            <!-- The score was never shown on this page: a student saw the key
-                 with no idea how they had done against it. Once every essay is
-                 marked this is the combined total; until then it is the
-                 machine's marks, labelled as such by the chip beside it. -->
             <span class="chip chip--primary">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 2 9.2 8.6 2 9.2l5.5 4.8L5.8 21 12 17.3 18.2 21l-1.7-7 5.5-4.8-7.2-.6L12 2Z" />
@@ -375,8 +242,6 @@
               <% } %>
             </span>
             <% if (locked) { %>
-            <!-- The route answers 403 here. Until now it answered 200 with the
-                 full key to anybody holding a valid cookie. -->
             <h2 class="empty__title">نموذج الإجابة غير متاح</h2>
             <p class="empty__text">
               يظهر نموذج الإجابة بعد أن تُسلّم محاولتك في <%= kindName %> ويتم
@@ -405,11 +270,6 @@
               </span>
               <% if (showFinal) { %>
               <%
-              /* The breakdown, once there is one worth reading: a student who
-                 sees 13/15 where the platform showed them 8/10 an hour ago is
-                 owed the two numbers that make it up. Only rendered when the
-                 essays are all marked, which is the only state where both
-                 halves are final. */
               %>
               <span class="ak-score__split">
                 <span class="num" dir="ltr"><%= T.auto %></span> تلقائي +
@@ -421,10 +281,6 @@
 
             <% if (awaiting) { %>
             <%
-            /* The base .notice is a flex container that expects a <p> child —
-               see listing.css. Written that way rather than putting the class
-               on the paragraph itself, so the icon sits beside the text
-               instead of above it. */
             %>
             <div class="notice ak-review">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -462,16 +318,6 @@
 
               <% if (row.type === "explain") { %>
               <%
-              /* An essay question has no options and no stored key, so the
-                 generic branch below would print "لم يتم إضافة اختيارات لهذا
-                 السؤال." — which describes a broken question, not this one.
-                 Show what the student wrote, the mark it earned once a teacher
-                 has awarded one, the teacher's comment, and the model answer.
-
-                 ORDER IS DELIBERATE: the student's own answer first, then the
-                 mark for it, then the model answer to compare against. Putting
-                 the model first invites reading it and then rereading one's own
-                 answer through it. */
               %>
               <% if (row.written) { %>
               <div class="ak-mine">
@@ -484,14 +330,6 @@
 
               <% if (row.graded) { %>
               <%
-              /* The awarded mark. `graded` is true for a mark of zero as much
-                 as for full marks — a teacher who read the answer and awarded
-                 nothing has graded it, and rendering that as "still waiting"
-                 would be a lie the student could not check.
-
-                 Coloured by the fraction, and always printed as the fraction
-                 as well: colour alone is a WCAG 1.4.1 failure, and this page
-                 is read on phones in daylight. */
               var pass = row.maxScore > 0 && row.score / row.maxScore >= 0.5;
               %>
               <div class="ak-mark<%= pass ? " ak-mark--pass" : " ak-mark--fail" %>">
@@ -510,11 +348,6 @@
 
               <% } else if (att) { %>
               <%
-              /* Not yet marked. Said here, per question, as well as in the
-                 banner at the top: on a paper with several essays the banner
-                 cannot say WHICH ones are outstanding, and a card that shows a
-                 mark sitting next to one that shows nothing otherwise reads as
-                 a zero. */
               %>
               <p class="ak-mark ak-mark--wait">
                 <span class="ak-mark__label">بانتظار التصحيح اليدوي</span>
@@ -551,9 +384,6 @@
                   </span>
                   <span class="opt__text"><%= row.options[p] %></span>
                   <% if (isRight) { %>
-                  <!-- The word, not just the colour and tick. Colour alone is a
-                       WCAG 1.4.1 failure, and this page is read on phones in
-                       daylight. -->
                   <span class="ak-opt__tag">الإجابة الصحيحة</span>
                   <% } %>
                 </li>
@@ -561,14 +391,6 @@
               </ul>
 
               <% if (row.orphan) { %>
-              <!-- The stored correct answer is not one of the stored options.
-                   The old page showed the options with no highlight and printed
-                   the answer separately underneath, so this went unnoticed.
-
-                   `orphan` is computed false for essay questions, which have
-                   neither options nor a key by design — otherwise every one of
-                   them would tell the student to "راجع السنتر" about a question
-                   behaving exactly as intended. -->
               <p class="notice notice--warn">
                 الإجابة الصحيحة المسجلة لهذا السؤال هي
                 <strong><%= row.correct %></strong> وهي غير موجودة بين
@@ -613,8 +435,6 @@
 
     <script>
       document.onkeydown = function (e) {
-        /* `event.keyCode` in the original was a ReferenceError outside Chrome —
-           there is no implicit global `event` in Firefox or Safari. */
         if (e.keyCode == 123) {
           return false;
         }

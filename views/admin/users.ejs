@@ -1,44 +1,5 @@
 <%- include("_head", { active: "students", title: "الطلاب" }) %>
 <%
-/* =========================================================================
-   STUDENT ROSTER
-
-   WHAT THE OLD PAGE DID
-     · Rendered EVERY matching student in one unpaginated table. The only
-       filter was the group dropdown; with a real roster this is one <tr> per
-       student on every load.
-     · The filter <form> lived INSIDE .topbar, and its <select> was styled with
-       `style="margin: 0 5px; width: 130px; height: 25px"` — a 25px control
-       with no <label>, so screen readers announced an unnamed combobox.
-     · Its placeholder <option> was `disabled selected hidden` with
-       value="All", so after filtering by Monday the control snapped back to
-       "Select Group" and gave no indication of the active filter.
-     · Both row actions were GET links styled with inline `background-color`.
-       `/removestudent/:id` DELETED A STUDENT ON GET — a crawler, a link
-       prefetch, or a mis-click was enough, with no confirmation and no CSRF.
-       Delete is a POST form now.
-     · `<td style="display: flex">` — a flex table cell drops out of the table
-       layout algorithm, so that column no longer aligned with its header.
-     · Printed raw `undefined` in every empty cell, because interpolating
-       `i.group` on a student with no group renders the string "undefined".
-     · Built "Grade&Specialization" by string-concatenating
-       `i.grade + " &"` — and `&` unescaped in text is an invalid entity start.
-     · Title was "Uesrs" (sic), in English, on an Arabic platform.
-
-   LOCALS  (all guarded)
-     students  Array  the current page of students
-     total     Number matching count across all pages
-     page      Number 1-based
-     pages     Number total page count
-     group     String active group filter ("" or "All" = none)
-     q         String active free-text search
-     limit     Number rows per page
-
-     Plus the shared filter locals from util/tableFilters.viewLocals():
-     f, GROUPS, GRADES, SUBJECTS, SORTS, GROUP_LABEL, GRADE_LABEL,
-     SUBJECT_LABEL, qs — spread in by the route and passed straight to
-     _table-toolbar.ejs.
-   ====================================================================== */
 
 var rows =
   typeof students !== "undefined" && Array.isArray(students) ? students : [];
@@ -51,28 +12,15 @@ var perPage = typeof limit !== "undefined" && limit ? Number(limit) : 25;
 if (!isFinite(curPage) || curPage < 1) curPage = 1;
 if (!isFinite(numPages) || numPages < 1) numPages = 1;
 
-/* The four filter values, from the route. Kept in one object so the pager and
-   the empty state read the same state the toolbar renders. The fallback keeps
-   this view renderable on its own — e.g. from an offline probe — and mirrors
-   what tableFilters.parse({}) returns. */
 var FS =
   typeof f !== "undefined" && f && typeof f === "object"
     ? f
     : { group: "", grade: "", level: "", sort: "", q: "", active: false, touched: false };
 
-/* The label maps used to be redeclared here, in showStudDegree.ejs and in
-   onlinestudent.ejs — three copies of the same eight weekday labels. They
-   arrive as locals now; these aliases keep the table markup below unchanged.
-   GRADES/SUBJECTS are the LABEL maps, not the {value,label} arrays the
-   toolbar iterates — the arrays reach the partial under their own names. */
 var GRADE_MAP = typeof GRADE_LABEL !== "undefined" && GRADE_LABEL ? GRADE_LABEL : {};
 var SUBJECT_MAP = typeof SUBJECT_LABEL !== "undefined" && SUBJECT_LABEL ? SUBJECT_LABEL : {};
 var GROUP_MAP = typeof GROUP_LABEL !== "undefined" && GROUP_LABEL ? GROUP_LABEL : {};
 
-/* Page links must carry every filter AND the sort, or paging silently resets
-   them. `qs` is tableFilters.toQuery, handed over as a local because EJS
-   cannot require; it encodes each value, so a search term containing & cannot
-   inject a parameter. */
 var pageHref = function (p) {
   var build = typeof qs === "function" ? qs : null;
   return "/student" + (build ? build(FS, { page: p }) : "?page=" + p);
@@ -91,9 +39,6 @@ var ICON = {
 %>
 
 <%
-/* One shared toolbar: search + group + subject + grade + name sort + Excel
-   export. `extra` carries this page's own "إضافة طالب" action into the same
-   button row, so it does not need a second flex container. */
 %>
 <%- include("_table-toolbar", {
   action: "/student",
@@ -198,12 +143,6 @@ var ICON = {
               </a>
 
               <%
-              /* POST, not a GET link: a GET delete fires on prefetch, on a
-                 crawler visit, and on any accidental navigation. The CSRF
-                 token is what stops a third-party page submitting this form
-                 with the admin's own cookie. data-confirm is read by
-                 admin.js; if JS is unavailable the delete still works, it
-                 just asks nothing first. */
               %>
               <form
                 method="post"
@@ -237,10 +176,6 @@ var ICON = {
 
     <div class="pager__nav">
       <%
-      /* "Previous" points at a lower page number. In RTL the previous control
-         belongs on the right, which is where the first flex item lands under
-         dir="rtl" — no ordering override needed, and the arrow glyphs are
-         chosen to match: previous points right, next points left. */
       %>
       <% if (curPage > 1) { %>
       <a class="btn btn--ghost btn--sm" href="<%= pageHref(curPage - 1) %>" rel="prev">

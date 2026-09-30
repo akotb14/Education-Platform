@@ -1,9 +1,5 @@
 <%- include("_head", { active: "exam", title: "الامتحانات" }) %>
 <%
-/* Exam list + add form. Shares _assessment-form.ejs with homework.ejs and
-   quiz.ejs. An exam is NOT attached to a unit — it carries its own subject and
-   grade plus an open/close window — so `kind: "exam"` swaps the unit picker
-   for those controls. */
 %>
 <%- include("_assessment-form", { kind: "exam" }) %>
 <%- include("_foot") %>

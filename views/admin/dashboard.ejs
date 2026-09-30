@@ -1,32 +1,5 @@
 <%- include("_head", { active: "dashboard", title: "لوحة التحكم" }) %>
 <%
-/* =========================================================================
-   ADMIN DASHBOARD
-
-   WHAT THE OLD PAGE DID
-     · Titled its only table "Recent Orders" with a "View All" button pointing
-       at "#" — leftover copy from the CodingNepal admin template it was cut
-       from. There are no orders; it is a student list.
-     · Rendered EVERY student in the collection, unpaginated and unsorted, into
-       that "recent" table. With a real roster that is one <tr> per student on
-       the dashboard's first paint.
-     · Showed a single stat card (student count) beside four columns of student
-       data, so the page was 95% table.
-     · Wrapped the card-number cell in `class="status delivered"`, a green
-       shipping-status pill from the template. It coloured every card number
-       green for no reason.
-     · Had a hard-coded `<img src="/WhatsApp Image 2022-02-18 at 9.21.54 PM.jpeg">`
-       avatar in the topbar. That file lives at public/admin/…, and the src has
-       no /admin prefix, so it 404'd on every load — and the filename's spaces
-       were never encoded.
-     · Was `<html lang="en">` with English UI, in an otherwise Arabic platform.
-
-   LOCALS  (all guarded — see _head.ejs on why)
-     stats    { students, lessons, quizzes, exams, homework }  Numbers
-     students Array of the most recent N, each { fullName, grade,
-              educetionlevel, phoneNumber, cardNumber, _id }
-     total    Number  full roster size, for the "showing N of M" line
-   ====================================================================== */
 
 var s = typeof stats !== "undefined" && stats ? stats : {};
 var rows =
@@ -38,9 +11,6 @@ var n = function (v) {
   return typeof v === "number" && isFinite(v) ? v : 0;
 };
 
-/* Arabic labels for the stored education-level values. The DB holds English
-   keys ("biology" / "geology"); anything unrecognised falls through to the
-   raw value rather than rendering blank. */
 var SUBJECTS = { biology: "الأحياء", geology: "الجيولوجيا" };
 var GRADES = {
   "1st": "الصف الأول",

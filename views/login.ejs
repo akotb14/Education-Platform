@@ -8,15 +8,11 @@
       content="تسجيل الدخول إلى منصة أ/ مرڤت عبدالرحمن لشرح منهج الأحياء والجيولوجيا للثانوية العامة."
     />
     <meta name="theme-color" content="#fe3f40" />
-    <!-- A login page has nothing to gain from being indexed. -->
     <meta name="robots" content="noindex, nofollow" />
     <title>تسجيل الدخول | كوين الاحياء والچيولوچيا</title>
 
     <link rel="icon" type="image/png" href="/assets/images/logo.png" />
 
-    <!-- Set before the stylesheets so the card never flashes in un-animated.
-         CSS keeps everything visible unless this class is present, so a JS
-         failure leaves a usable form rather than a blank one. -->
     <script>
       document.documentElement.classList.add("js");
     </script>
@@ -38,7 +34,6 @@
     <a class="sr-only skip" href="#form-card">تخطي إلى النموذج</a>
 
     <div class="auth">
-      <!-- ======================================================= brand side -->
       <aside class="auth__brand">
         <span class="auth__mesh" aria-hidden="true"></span>
         <span class="auth__grid-lines" aria-hidden="true"></span>
@@ -85,7 +80,6 @@
         </div>
       </aside>
 
-      <!-- ======================================================== form side -->
       <main class="auth__main" id="main">
         <div class="auth__card" id="form-card">
           <div class="auth__heading">
@@ -93,9 +87,6 @@
             <p>سجّل دخولك للمتابعة، أو اطلب الاشتراك إن لم يكن لديك حساب.</p>
           </div>
 
-          <!-- Server messages. errorLogin was passed to this view before but
-               never rendered, so a wrong password produced a blank form with no
-               explanation whatsoever. Both flashes are arrays. -->
           <% if (typeof errorLogin !== "undefined" && errorLogin && errorLogin.length) { %>
           <div
             class="alert alert--error"
@@ -126,9 +117,6 @@
           </div>
           <% } %>
 
-          <!-- Radios drive the panes in CSS alone, so the tabs work with JS
-               off. They are clipped rather than hidden so they stay focusable
-               and arrow-keyable — the keyboard behaviour a tablist should have. -->
           <input
             class="tab-input"
             type="radio"
@@ -145,15 +133,10 @@
           </div>
 
           <div class="panes">
-            <!-- ============================================== login pane -->
             <section class="pane pane--login" aria-label="تسجيل الدخول">
               <form method="post" action="/login" class="form" data-validate-form>
                 <input type="hidden" name="_csrf" value="<%=csrfToken%>" />
 
-                <!-- Login checks phoneNumber + password only. Deliberately no
-                     format rule on either: accounts were created by hand over
-                     several years, so an unknown stored format must not lock a
-                     real student out of their own account. -->
                 <div class="field">
                   <div class="field__control">
                     <input
@@ -218,9 +201,6 @@
                   <span class="field__error" aria-live="polite"></span>
                 </div>
 
-                <!-- No name attribute on this submit, and none anywhere in this
-                     form. The controller reads req.body.loginOnline to decide
-                     which branch to run; it must stay absent here. -->
                 <button
                   class="btn btn--primary btn--block"
                   type="submit"
@@ -233,27 +213,15 @@
 
                 <p class="form__meta">
                   <span>ليس لديك حساب؟</span>
-                  <!-- A <label> rather than a link: it drives the same radio the
-                       tabs use, so switching panes needs no JS at all. -->
                   <label class="link link--btn" for="tab-join">اطلب الاشتراك</label>
                 </p>
               </form>
             </section>
 
-            <!-- =============================================== join pane -->
             <section class="pane pane--join" aria-label="طلب اشتراك">
               <form method="post" action="/login" class="form" data-validate-form>
                 <input type="hidden" name="_csrf" value="<%=csrfToken%>" />
 
-                <!-- THE DISCRIMINATOR. controllers/signup.contr.js branches on
-                     `req.body.loginOnline != "ارسال البيانات"`, so this exact
-                     string is what routes the POST to the join branch instead
-                     of the login branch.
-
-                     It lives in a hidden input rather than on the submit button
-                     so the button's visible label can be changed freely. Do not
-                     edit this value — a single byte's drift turns every join
-                     request into a failed login. -->
                 <input type="hidden" name="loginOnline" value="ارسال البيانات" />
 
                 <p class="field__hint" style="margin-block-end: var(--sp-2)">
@@ -308,8 +276,6 @@
                     <span class="field__error" aria-live="polite"></span>
                   </div>
 
-                  <!-- This number is new data the centre has to dial, so unlike
-                       the login field it IS format-checked. -->
                   <div class="field">
                     <div class="field__control">
                       <input
@@ -335,9 +301,6 @@
                   </div>
                 </div>
 
-                <!-- Every option VALUE below is load-bearing: admin pages match
-                     on them and the schema enums constrain them. Only the
-                     visible labels are translated. -->
                 <div class="form__row form__row--2">
                   <div class="field field--select">
                     <div class="field__control">
@@ -443,9 +406,6 @@
           <p class="divider">أو تواصل معنا</p>
 
           <div class="socials">
-            <!-- wa.me, not the whatsapp:// scheme the old page used: that only
-                 resolves with the app installed and dead-ends on desktop. The
-                 country code is required, so 011… becomes 2011…. -->
             <a
               class="social social--wa"
               href="https://wa.me/201122839310"
@@ -457,8 +417,6 @@
                 <path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.7 4.8-1.3A10 10 0 1 0 12 2Zm5.8 14.2c-.2.7-1.4 1.3-2 1.4-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.8-.7-3.1-1.3-5.1-4.5-5.3-4.7-.1-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.3.5-.4.7-.4h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.3 0 .5l-.3.5-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.1 1 2.1 1.3 2.4 1.4.3.1.4.1.6-.1l.9-1c.2-.2.4-.2.6-.1l2 1c.2.1.4.2.4.3.1.1.1.6-.1 1.3Z" />
               </svg>
             </a>
-            <!-- Points at the page, not the single 2022 post the old page
-                 linked. No YouTube icon: the existing link was href="#". -->
             <a
               class="social social--fb"
               href="https://www.facebook.com/110791531658361"
@@ -479,8 +437,6 @@
       </main>
     </div>
 
-    <!-- Kept per your earlier decision. `event.keyCode` in the first branch was
-         a latent ReferenceError under strict mode; it reads `e` now. -->
     <script>
       document.onkeydown = function (e) {
         if (e.keyCode == 123) {

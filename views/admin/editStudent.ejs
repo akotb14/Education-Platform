@@ -1,57 +1,11 @@
 <%- include("_head", { active: "students", title: "تعديل بيانات طالب" }) %>
 <%
-/* =========================================================================
-   EDIT STUDENT
-
-   WHAT THE OLD PAGE DID — four real bugs, not just styling:
-
-   1. `student.month.includes(i.month)` with NO guard. `month` is `[Array]` in
-      the schema with no default, so it is undefined on every student created
-      through /sign (postInfo never sets it). Opening the edit page for such a
-      student threw "Cannot read properties of undefined (reading 'includes')"
-      inside the template — a 500, and because res.render errors bypass the
-      route's own try/catch, the route's `res.sendStatus(400)` never ran.
-
-   2. A trailing `<input type="hidden" name="month" value="" />` AFTER the
-      checkboxes. It always submits, so `req.body.month` is either the string
-      "" (no boxes ticked) or an array whose last element is "". The update
-      then wrote that empty string into the month array on every single save.
-      Removed — the "no months selected" case is handled by the route reading
-      an absent field as [], which is what an unchecked checkbox group means.
-
-   3. Every <select> carried a hidden placeholder <option> holding the CURRENT
-      value, plus a fixed list of real options. Because the placeholder was
-      `selected hidden`, the closed control rendered blank-ish and none of the
-      real options was ever marked selected — so the admin could not see the
-      student's current grade/group/level without opening the dropdown, and
-      re-saving without touching it re-submitted the placeholder. Now the real
-      matching option is marked selected and there is no placeholder at all.
-
-   4. Duplicate `id="month"` on every checkbox, and every label pointed at
-      `for="scales"` — an element that does not exist on the page. Clicking a
-      month label toggled nothing. Each checkbox now has a unique id.
-
-   Also: `<h3>Edit student</h3>` was the only heading and the page <title> was
-   "Category", left over from the template it was copied from.
-
-   LOCALS
-     student    Object  the record being edited (required)
-     month      Array   [{ month }] available months for this level+grade
-     csrfToken  String  from csurf
-   ====================================================================== */
 
 var st = typeof student !== "undefined" && student ? student : {};
 
-/* `month` the local (available months) vs `st.month` the field (the student's
-   chosen months) — the old template used the same identifier for both, which
-   is how bug #1 stayed invisible. Renamed here. */
 var available =
   typeof month !== "undefined" && Array.isArray(month) ? month : [];
 
-/* The guard bug #1 needed. Mongoose declares `month` as [Array], so a stored
-   value can be an array of arrays; flatten one level and drop empties (the
-   phantom hidden input above wrote "" into existing records, so real data in
-   the DB already contains them). */
 var chosen = [];
 if (Array.isArray(st.month)) {
   for (var m = 0; m < st.month.length; m++) {
@@ -71,37 +25,14 @@ var isChosen = function (name) {
 
 var token = typeof csrfToken !== "undefined" && csrfToken ? csrfToken : "";
 
-/* The LEVELS / GRADES / GROUPS arrays that used to be declared here are gone.
-   This page and addStudent.ejs each held their own copy of all three, and the
-   grade labels had already forked between them — "الصف الأول" here, "الأول"
-   there, on two pages an admin sees one after the other. They now live in
-   _field.ejs as presets, stated once.
-
-   The note that was attached to LEVELS is worth keeping, because it is about
-   the data and not the markup: three other admin views offer
-   Secondary/Preparatory for `educetionlevel`, values the student-facing queries
-   can never match. This page offers biology/geology, which is what /sign writes.
-   A record already holding one of the other values still shows it — _field.ejs
-   appends any stored value that is not in the list rather than dropping it. */
 
 var ROLES = [
   { value: "false", label: "طالب" },
   { value: "true", label: "مشرف" }
 ];
 
-/* admin is a String in the schema, and is absent on older records. Treat
-   anything that is not the literal "true" as a student. */
 var curRole = st.admin === "true" ? "true" : "false";
 
-/* Login resolves an account by phoneNumber and by nothing else, so moving a
-   number onto an account that already has it leaves one of the two unable to
-   sign in — silently, because both records still look correct in the dashboard.
-   POST /editStudent/:id rejects that and flashes the value it refused; this is
-   where the admin is told which field to change.
-
-   The refused value is echoed back into the input rather than the stored one:
-   the redirect re-reads the record from the database, so without this the field
-   would show the OLD number next to a message saying it is already in use. */
 var dupePhone =
   typeof checkPhone !== "undefined" && checkPhone ? checkPhone : null;
 var phoneMsg = dupePhone ? "رقم الهاتف مُستخدَم بالفعل لحساب آخر." : "";
@@ -111,12 +42,6 @@ var phoneValue = dupePhone && dupePhone.phoneNumber
 %>
 
 <%
-/* The back link was a `.btn btn--ghost` carrying the app's only inline
-   `style="margin-block-end"`. Two problems in one element: a button that
-   navigates is not a button, and a page that needs an inline style is a page
-   whose spacing has no home. It is now the same `.crumbs` nav that
-   gradingDetail.ejs and _edit-paper.ejs use, so all three edit pages start the
-   same way — and it says where the admin is, not just where they can go. */
 %>
 <nav class="crumbs" aria-label="مسار التنقل">
   <a href="/student">الطلاب</a>
@@ -136,14 +61,6 @@ var phoneValue = dupePhone && dupePhone.phoneNumber
     <input type="hidden" name="_csrf" value="<%= token %>" />
 
     <%
-    /* The same nine includes as addStudent.ejs, in the same order, so the two
-       pages read as one form in two states rather than as two forms.
-
-       `required` is deliberately NOT aligned between them. addStudent requires
-       cardNumber because the schema does; this page never has, so adding it
-       would change what the server accepts — a validation change dressed as a
-       styling change. Flagged here instead: an admin can currently clear a
-       student's card number on save, and that number is the login identity. */
     %>
     <div class="form-grid">
       <%- include("_field", { fld: {
@@ -187,10 +104,6 @@ var phoneValue = dupePhone && dupePhone.phoneNumber
     </div>
 
     <%
-    /* The `style="margin-block-start"` this fieldset carried is now the
-       `.fieldset` rule's own margin: a section that follows a grid of fields
-       always needs that gap, so it belongs to the component, not to this one
-       call site. */
     %>
     <fieldset class="fieldset">
       <legend>الشهور المتاحة للطالب</legend>
@@ -201,9 +114,6 @@ var phoneValue = dupePhone && dupePhone.phoneNumber
       </p>
       <% } else { %>
       <%
-      /* Not routed through _field.ejs: this is one `name` with many controls,
-         which is a different thing from a field with one control. The .check row
-         markup is shared through CSS instead. */
       %>
       <div class="check-grid">
         <% for (var i = 0; i < available.length; i++) { var mo = available[i];
@@ -222,10 +132,6 @@ var phoneValue = dupePhone && dupePhone.phoneNumber
       </div>
 
       <%
-      /* No trailing hidden month input. A checkbox group with nothing ticked
-         legitimately submits no `month` key at all; the route normalises an
-         absent value to []. The old hidden input existed to force the key to
-         be present and, in doing so, wrote "" into every student's months. */
       %>
       <% } %>
     </fieldset>

@@ -6,40 +6,6 @@
     <meta name="theme-color" content="#fe3f40" />
 
     <%
-      /* =====================================================================
-         SHARED QUESTION PAPER — replaces views/showQuestion.ejs, views/quiz/
-         showQuestion.ejs and views/homework/showQuestion.ejs.
-
-         Those three diverged only in which key held the questions
-         (quiz.quiz / quiz.quizId.quiz / quiz.homeId.quiz) and whether a timer
-         was drawn. Each caller now normalises to `paper` before rendering.
-         The originals are left on disk, unreferenced.
-
-         Rendered by:
-           controllers/quiz.contro.js  GET /examApp/:nameQuiz      kind "exam"
-           routes/quiz.router.js       GET /quizApp/:nameQuiz      kind "quiz"
-           routes/homework.router.js   GET /homeworkApp/:nameQuiz  kind "homework"
-
-         LOCALS
-           kind          "quiz" | "exam" | "homework"
-           paper         the quiz document (its `quiz` array holds the questions)
-           secondsLeft   seconds remaining, or null on an untimed paper
-           totalSeconds  the full allowance, for the progress bar
-           alreadyTaken  truthy when this student has already submitted
-           backHref      where the exit link goes
-
-         THE POST CONTRACT IS UNCHANGED. Radios are still named answer0..answerN
-         and still post to this same URL, because all three graders read
-         req.body[`answer${i}`] against paper.quiz[i].correctAnswer by index.
-
-         THE ASSESSMENT BAR. The countdown used to sit inside .paper, above the
-         form — a sticky element nested in the question column, which read as
-         part of the first question and left the paper with no header of its
-         own. It is now a page-level bar carrying the paper's name, the
-         student's position in the paper, the clock and the question pad, stuck
-         to the top of the viewport for the whole sitting. Because it is
-         `position: sticky` in normal flow it reserves its own space and cannot
-         overlap a question — see the note on .abar in quiz.css. */
 
       var kindRaw = typeof kind !== "undefined" && kind ? String(kind) : "quiz";
       var KINDS = {
@@ -52,26 +18,11 @@
       var doc = (typeof paper !== "undefined" && paper && typeof paper === "object") ? paper : null;
       var title = doc && doc.nameQuiz ? String(doc.nameQuiz) : "";
 
-      /* Rows are read defensively. A question saved through the admin form
-         with no options at all stores answer: [undefined], and the old
-         showAnswer template did `for (j of data.quiz[i].answer[0])` straight
-         onto that — "answer[0] is not iterable", thrown inside render. Express
-         routes render errors to its own error handler rather than to the
-         route's catch, so that surfaced as a 500 on the whole paper. */
       var rows = [];
       var all = doc && Array.isArray(doc.quiz) ? doc.quiz : [];
 
-      /* The question-type whitelist. Guarded because EJS compiles with
-         with(locals) — naming a local the route did not pass throws
-         ReferenceError rather than yielding undefined — and inlined as a
-         fallback so this page still renders if a route forgets to spread
-         util/questionTypes.viewLocals(). */
       var QT = typeof QTYPES !== "undefined" ? QTYPES : ["mcq", "truefalse", "explain"];
 
-      /* The two stored True/False options, same guard. Used only to decide
-         WHICH icon goes on which choice; a paper whose two options are
-         anything else still renders as a two-choice question, just without the
-         tick and cross. */
       var TFO = typeof TF_OPTIONS !== "undefined" && TF_OPTIONS ? TF_OPTIONS : ["صح", "خطأ"];
 
       for (var i = 0; i < all.length; i++) {
@@ -83,30 +34,16 @@
         if (raw && typeof raw.length === "number") {
           for (var o = 0; o < raw.length; o++) {
             var v = raw[o] == null ? "" : String(raw[o]).trim();
-            /* Empty strings are real in this data: the admin form posts a
-               fixed number of option boxes and blanks are stored as "". */
             if (v) opts.push(v);
           }
         }
 
-        /* Uploaded question images land in ./images/ (middlewares/upload.js),
-           which app.js:73 mounts at the root, so the file is served at
-           /<filename>.
-
-           The old code was image.split('\\')[1] || image.split('/')[1] — the
-           SECOND segment, not the last. It happened to work because multer
-           stores exactly "images\name.png", but any deeper path returned
-           undefined and rendered src="/". Splitting on both separators and
-           taking the last segment is correct on Windows and POSIX alike. */
         var img = q.image ? String(q.image).trim() : "";
         var imgName = img ? img.split(/[\\/]/).pop() : "";
 
         rows.push({
           question: q.question == null ? "" : String(q.question),
           options: opts,
-          /* Which input to render. Read through the same whitelist the server
-             uses, because a question saved before question types existed has
-             no qType field at all and must come out as multiple choice. */
           type: QT.indexOf(q.qType) !== -1 ? q.qType : "mcq",
           img: imgName ? "/" + encodeURIComponent(imgName) : ""
         });
@@ -121,10 +58,6 @@
       if (total === null || isNaN(total) || total <= 0) total = left;
       var timed = left !== null && total !== null && total > 0;
 
-      /* Is the student actually sitting the paper right now? Drives the
-         assessment bar and the focused body class — the "already submitted"
-         and "no questions" states are ordinary pages and keep the site header
-         and the page hero. */
       var sitting = !taken && rows.length > 0;
     %>
 
@@ -155,20 +88,10 @@
     <script src="/assets/js/quiz.js" defer></script>
   </head>
 
-  <!-- .paper-page only while a paper is actually being answered. It hands the
-       top of the viewport to the assessment bar: the site header on this page
-       is a logo and nothing else (see below), so keeping it stuck there would
-       cost 72px of reading room for no navigation. -->
   <body<% if (sitting) { %> class="paper-page"<% } %> oncontextmenu="return false;">
     <a class="sr-only" href="#main">تخطي إلى المحتوى</a>
 
     <% if (sitting) { %>
-    <!-- ===================================================== assessment bar ==
-         The paper's own header: what is being sat, where the student is in it,
-         how long is left, and a jump pad. Sticky for the whole sitting, so the
-         clock is on screen at every scroll position — which is the one thing
-         the old layout could not do, because the countdown lived inside the
-         question column and scrolled away with the first question. -->
     <div class="abar" data-abar>
       <div class="abar__inner">
         <div class="abar__id">
@@ -186,15 +109,6 @@
         </p>
 
         <% if (timed) { %>
-        <!-- data-seconds is this student's own remaining time, computed from a
-             deadline stored on their degree record. It used to come from a
-             module-level `let d` in the router — one variable shared by every
-             student on the server, so two simultaneous attempts decremented
-             the same counter.
-
-             The deadline is also what the grader now checks the submission
-             against (util/attemptTime.js), so clearing this countdown in the
-             console no longer buys time: a late hand-in is recorded as late. -->
         <div
           class="abar__timer"
           data-timer
@@ -207,58 +121,24 @@
             <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 10.6V6h-2v7.4l5.2 3.1 1-1.7-4.2-2.2Z" />
           </svg>
           <span class="sr-only">الوقت المتبقي</span>
-          <!-- dir="ltr" plus tabular figures: a clock is a Latin digit run
-               inside an RTL line, and the colons are bidi-neutral, so without
-               isolation 01:20 can render as 20:01. -->
           <span class="abar__clock" data-clock dir="ltr">--:--</span>
         </div>
 
-        <!-- Announced only when the remaining time crosses a threshold. The
-             timer itself is aria-live="off" on purpose: a region that changes
-             every second is read continuously and makes the page unusable with
-             a screen reader. -->
         <span class="sr-only" data-timer-say role="status" aria-live="polite"></span>
         <% } %>
       </div>
 
       <% if (timed) { %>
-      <!-- Time remaining, as a hairline across the foot of the bar. Animated as
-           a percentage inline-size rather than scaleX: transform does not
-           mirror under dir="rtl". -->
       <div class="abar__track" aria-hidden="true">
         <span class="abar__bar" data-bar></span>
       </div>
       <% } %>
 
       <% if (rows.length > 1) { %>
-      <!-- ------------------------------------------------- question pad ----
-           Which question is open, which have been answered, a way to reach any
-           of them without scrolling the whole paper, and a step to the previous
-           or next one. There was no question navigation on this page before —
-           only the answered count in the foot.
-
-           SECOND ROW OF THE BAR, under a hairline: identity, position and clock
-           on the first line, navigation on the second.
-
-           Buttons, not links: an anchor would put #q3 in the address bar and a
-           reload of a paper mid-attempt is not something to encourage. Every
-           button here is type="button" — inside a form, a button with no type is
-           a submit button, so omitting it would turn "next question" into
-           "hand in the paper".
-
-           NONE of these move the bar. They scroll the page; the bar is sticky in
-           CSS and no script touches its position. -->
       <nav class="qnav" aria-label="التنقل بين الأسئلة">
         <div class="qnav__inner">
           <p class="qnav__label" aria-hidden="true">الأسئلة</p>
 
-          <!-- Previous. Disabled on the first question by quiz.js — a real
-               disabled state, so it is announced and skipped by Tab rather than
-               being a control that silently does nothing.
-
-               The chevron points inline-end, because "back" under dir="rtl" is
-               to the right. It is drawn with a logical path rather than a
-               transform so it does not need mirroring. -->
           <button
             class="qnav__step"
             type="button"
@@ -279,16 +159,12 @@
                 data-qjump="<%= n %>"
               >
                 <span class="num"><%= n + 1 %></span>
-                <!-- State in words as well as in fill and outline: colour is
-                     never the only signal, and a pad of 20 chips is unreadable
-                     to a screen reader without it. Written by quiz.js. -->
                 <span class="sr-only" data-qjump-state></span>
               </button>
             </li>
             <% } %>
           </ul>
 
-          <!-- Next. Disabled on the last question. -->
           <button
             class="qnav__step"
             type="button"
@@ -305,25 +181,6 @@
     </div>
     <% } %>
 
-    <!-- AFTER the assessment bar, deliberately, and this is the only reason the
-         bar can be at the top of the viewport at rest.
-
-         .abar is `position: sticky`, which pins an element once the scroll
-         reaches it and not before. While the site header sat above it in the
-         document, "once the scroll reaches it" meant 73px down: at scrollY 0 the
-         bar measured top=73, and only after scrolling past the header did it
-         reach top=0. Making the header non-sticky (below) was not enough — a
-         static box still occupies its space in flow. It had to move.
-
-         So on a paper the assessment bar is the first thing in the body and the
-         logo sits under it, which is also the order the brief's own layout
-         asks for. When the page is not a sitting, the block above renders
-         nothing and this is still the first element, unchanged.
-
-         Nothing is removed: the logo is still a link home and still focusable,
-         so no element leaves the tab order. It is now reached after the bar's
-         own controls, which on a paper is the better order anyway — the clock
-         and the jump pad are what a student Tabs for. -->
     <header class="site-header">
       <div class="container site-header__inner">
         <a class="site-logo" href="/">
@@ -334,9 +191,6 @@
             height="960"
           />
         </a>
-        <!-- No nav on a paper in progress: every link here is a way to lose an
-             attempt that cannot be retaken. The logo still goes home, and the
-             exit link at the foot says plainly what leaving costs. -->
       </div>
     </header>
 
@@ -364,8 +218,6 @@
       <section class="section<%= sitting ? " section--paper" : "" %>">
         <div class="container">
           <% if (taken) { %>
-          <!-- The old page rendered the bare English string "you can not enter
-               exam again" as an unstyled <h2> on a blank document. -->
           <div class="empty">
             <span class="empty__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="currentColor">
@@ -404,12 +256,6 @@
 
           <% } else { %>
           <div class="paper">
-            <!-- ONE form, opened once around the loop. The old markup opened a
-                 <form> inside the per-question loop and closed it only inside
-                 `if (i === last)`, leaving N-1 unclosed tags. It worked by
-                 accident: the HTML parser drops a <form> start tag while a form
-                 element pointer is already set, so every radio landed in the
-                 first form. Posts to this same URL, as before. -->
             <form method="post" data-paper-form>
               <% for (var r = 0; r < rows.length; r++) { var row = rows[r];
                  var isTF = row.type === "truefalse" && row.options.length === 2; %>
@@ -421,9 +267,6 @@
                       <span class="sr-only">السؤال <%= r + 1 %>:</span>
                       <%= row.question %>
                     </h2>
-                    <!-- What kind of answer is expected, said once, next to the
-                         question. The type used to be visible only in the shape
-                         of the controls below it. -->
                     <p class="q__kind">
                       <% if (row.type === "explain") { %>سؤال مقالي
                       <% } else if (isTF) { %>صح أو خطأ
@@ -434,20 +277,11 @@
 
                 <% if (row.img) { %>
                 <figure class="q__figure">
-                  <!-- alt="" is correct here: the image IS the question, and
-                       the question text sits directly above it. The old markup
-                       used alt="sa". -->
                   <img src="<%= row.img %>" alt="" loading="lazy" />
                 </figure>
                 <% } %>
 
                 <% if (row.type === "explain") { %>
-                <!-- A written answer. Posts under `explain<r>`, deliberately a
-                     different name from the `answer<r>` radios: the grader
-                     compares answer<r> to the stored key by position, and a
-                     free-text field sharing that name could collide with it.
-                     No `required` here either — same reason as the radios, the
-                     timed auto-submit has to succeed with blanks. -->
                 <div class="q__written">
                   <label class="sr-only" for="explain<%= r %>">
                     إجابتك على السؤال <%= r + 1 %>
@@ -464,14 +298,6 @@
                   <p class="q__note">تُصحَّح إجابة السؤال المقالي يدويًا.</p>
                 </div>
                 <% } else { %>
-                <!-- A radiogroup rather than loose inputs, so the question text
-                     is announced once with the options rather than per option.
-
-                     True/False takes the same markup and the same POST field —
-                     the two are byte-identical in the database, a two-option
-                     multiple choice — and differs only in the modifier class,
-                     which lays the two choices side by side and marks them with
-                     a tick and a cross. -->
                 <div
                   class="q__options<%= isTF ? " q__options--tf" : "" %>"
                   role="radiogroup"
@@ -481,12 +307,7 @@
                   <p class="empty__text">لم يتم إضافة اختيارات لهذا السؤال.</p>
                   <% } %>
                   <% for (var p = 0; p < row.options.length; p++) {
-                       /* MCQ choices are lettered so a student can say "I
-                          picked B"; the letters are display only and nothing
-                          about the posted value changes. */
                        var mark = isTF ? "" : String.fromCharCode(65 + p); %>
-                  <!-- The whole row is the label, so the tap target is the full
-                       card rather than the 20px radio. -->
                   <label class="opt<%= isTF ? " opt--tf" : "" %>">
                     <input
                       type="radio"
@@ -523,8 +344,6 @@
                       <span class="num"><%= rows.length %></span>
                     </strong>
                   </p>
-                  <!-- Answered progress, distinct from the time bar in the
-                       assessment bar above: this one only ever grows. -->
                   <span class="paper__meter" aria-hidden="true">
                     <span class="paper__meter-fill" data-answered-bar></span>
                   </span>
@@ -539,11 +358,6 @@
                   </a>
                 </div>
 
-                <!-- Shown after the student cancels the confirmation with
-                     questions still blank, and cleared as soon as the last one
-                     is filled in. Advisory: the inputs are never `required`,
-                     because on a timed paper the automatic submit has to
-                     succeed with blanks. -->
                 <p class="paper__warn" data-warn hidden>
                   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M12 2 1 21h22L12 2Zm1 15h-2v-2h2v2Zm0-4h-2V9h2v4Z" />
@@ -557,17 +371,6 @@
             </form>
           </div>
 
-          <!-- ================================================ confirm submit ==
-               Outside the form on purpose: a button inside it would submit the
-               paper on any stray Enter press, which is the opposite of a
-               confirmation. quiz.js fills in the message and submits the form
-               directly when the student agrees.
-
-               The two wordings live here rather than in the script so the
-               Arabic stays with the rest of the page's Arabic; {n} is the count
-               quiz.js substitutes. With JavaScript off this never opens and the
-               button submits straight away, which is the behaviour a paper with
-               a deadline has to keep. -->
           <div
             class="cdlg"
             data-confirm

@@ -1,42 +1,5 @@
 <%- include("_head", { active: "grading", title: "تصحيح تسليم" }) %>
 <%
-/* =========================================================================
-   ONE SUBMISSION, QUESTION BY QUESTION — the screen the whole feature exists
-   for. Auto-graded questions are read-only evidence; every Explain question
-   gets a mark box and a feedback box, and all of them post together.
-
-   ONE FORM FOR THE WHOLE PAPER, not one per question. A paper is marked in a
-   single pass and the status is recomputed once, so a teacher cannot leave the
-   page in a state where three questions saved and the fourth did not. It also
-   means the browser's own number validation covers every box before anything
-   is sent.
-
-   FIELD NAMING is flat and index-based — score_3, feedback_3 — for the same
-   reason the question builder uses q_0_a1: app.js parses bodies with
-   express.urlencoded({ extended: false }), which is the querystring module and
-   does no bracket nesting whatsoever. `score_<index>` keys off the question's
-   position in the PAPER, which is what util/grading.applyMarks reads back.
-
-   LOCALS
-     attempt   Object  the degreeQuiz document (.lean())
-     paper     Object  the populated quiz/homework/exam document
-     pupil     Object  the populated student document
-     kind      String  the queue's type facet, carried through for the back link
-     status    String  the queue's status facet, ditto
-     KIND_LABEL Object type -> Arabic label
-     flashOk   String  a message from the previous save              (optional)
-     flashBad  String  a validation refusal from the previous save   (optional)
-     csrfToken String
-     f, qs, GROUP_LABEL, GRADE_LABEL — util/tableFilters.viewLocals()
-     GSTATUS, GSTATUS_LABELS, FEEDBACK_MAX, totalsOf, reviewRows,
-     statusOf — util/grading.viewLocals()
-     QTYPE_LABELS — util/questionTypes.viewLocals()
-
-   Read behind `typeof` guards throughout: EJS compiles with `with(locals)`, so
-   naming a key the caller did not pass throws ReferenceError, and a render
-   error bypasses the route's try/catch because Express hands it to its own
-   error handler.
-   ====================================================================== */
 
 var A = typeof attempt !== "undefined" && attempt ? attempt : {};
 var P = typeof paper !== "undefined" && paper ? paper : {};
@@ -77,12 +40,6 @@ var TLABEL =
 
 var FBMAX = typeof FEEDBACK_MAX !== "undefined" && FEEDBACK_MAX ? Number(FEEDBACK_MAX) : 2000;
 
-/* The two helpers this page genuinely cannot inline — the question/answer join
-   and the arithmetic. Their fallbacks render an honest empty page rather than a
-   half-computed one: with no reviewRows there are no questions to show, and
-   with no totalsOf there are no marks to report. A caller that forgets
-   gr.viewLocals() gets a page that says nothing instead of a page that says
-   something wrong. */
 var ROWS = typeof reviewRows === "function" ? reviewRows(P, A) || [] : [];
 var T =
   typeof totalsOf === "function"
@@ -93,8 +50,6 @@ var T =
         submitted: false, status: ST.NONE
       };
 
-/* Same server-stable formatting as the queue: no Intl, no locale month names,
-   so the string does not depend on the host's ICU build. */
 function stamp(d) {
   if (!d) return "";
   var t = d instanceof Date ? d : new Date(d);
@@ -118,16 +73,6 @@ if (!when && A._id) {
 var markedAt = A.gradedAt ? stamp(A.gradedAt) : "";
 var markedBy = A.gradedBy ? String(A.gradedBy) : "";
 
-/* HANDED IN AFTER THE DEADLINE. Stamped by util/attemptTime.js when the answers
-   arrived more than its grace window past this attempt's own deadline. The
-   submission was still recorded and graded — refusing it would have awarded
-   zero and destroyed the only copy of the work — and it was forced into the
-   marking queue instead, which is why this attempt may be here at all.
-
-   Absent on attempts submitted before the flag existed, which reads as "not
-   known to be late" rather than "on time", so nothing shows unless it is set.
-   Both minutes and the exact seconds are given: the minutes are what a teacher
-   judges by, the seconds are the evidence. */
 var wasLate = A.late === true;
 var lateSecs = wasLate && A.lateBy != null ? Math.max(0, Math.floor(Number(A.lateBy))) : 0;
 if (!isFinite(lateSecs)) lateSecs = 0;
@@ -135,8 +80,6 @@ var lateMins = lateSecs ? Math.max(1, Math.round(lateSecs / 60)) : 0;
 
 var kindOf = A.type || P.type || "";
 var essayRows = ROWS.filter(function (r) { return !r.auto; });
-/* The back link, rebuilt from the same pieces the route uses, so returning
-   from here lands on the exact list the admin came from. */
 var QS = typeof qs === "function" ? qs : function () { return ""; };
 function queueHref() {
   var base = QS(FS, null);
@@ -179,9 +122,6 @@ BADGE[ST.GRADED] = " badge--graded";
 
 <% if (badMsg) { %>
 <%
-/* A refusal, not a clamp. applyMarks returns the question number and the bound
-   it broke, and nothing was written — so the numbers still on screen are the
-   saved ones, and the boxes still hold what was typed. */
 %>
 <p class="flash flash--bad" role="alert">
   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -233,9 +173,6 @@ BADGE[ST.GRADED] = " badge--graded";
         <span class="num" dir="ltr"><%= when %></span>
         <% } else if (started) { %>
         <%
-        /* Handed in before submittedAt existed. This is the moment the attempt
-           was OPENED — up to a full paper's time earlier — and it is labelled
-           as that rather than passed off as a hand-in time. */
         %>
         <span class="num" dir="ltr"><%= started %></span>
         <span class="tag">بدء المحاولة</span>
@@ -275,9 +212,6 @@ BADGE[ST.GRADED] = " badge--graded";
 </section>
 
 <%
-/* Auto, manual and final side by side. The final is the number the request
-   asks for — automatic plus manual — and it is derived here and in
-   util/grading, never stored, so there is one definition of it. */
 %>
 <ul class="stats stats--3">
   <li>
@@ -326,22 +260,10 @@ BADGE[ST.GRADED] = " badge--graded";
   </li>
 </ul>
 <%
-/* ONE FORM AROUND EVERY QUESTION, so the whole paper is marked in one submit
-   and the status is recomputed once. The auto-graded cards sit inside it and
-   contribute no fields — they are evidence for the person marking, not input.
-
-   POSTs to this same URL. The filters travel as hidden fields rather than in
-   the action, because the route rebuilds the redirect from req.body through
-   the same whitelists it applies to req.query — a value that reaches a
-   Location header is never trusted just because it came back from our own
-   page. */
 %>
 <form class="gq-form" method="post" action="/grading/<%= A._id %>">
   <input type="hidden" name="_csrf" value="<%= token %>" />
   <%
-  /* The queue state the admin came from, so saving returns them to it. Blank
-     values are skipped: an empty `group=` in the redirect is noise that the
-     parser would discard anyway. */
   %>
   <% if (FS.group) { %><input type="hidden" name="group" value="<%= FS.group %>" /><% } %>
   <% if (FS.level) { %><input type="hidden" name="educetionlevel" value="<%= FS.level %>" /><% } %>
@@ -391,19 +313,12 @@ BADGE[ST.GRADED] = " badge--graded";
 
         <% if (row.image) { %>
         <%
-        /* alt="" — the image IS the question here, and the question text is
-           already the paragraph above it; a description would be read twice. */
         %>
         <img class="gq__image" src="<%= row.image %>" alt="" loading="lazy" />
         <% } %>
 
         <% if (row.auto) { %>
         <%
-        /* ---- AUTO-GRADED: read-only evidence -------------------------
-           The options with the key marked, then what the student chose and
-           whether it scored. Nothing here is an input: the machine already
-           marked it and re-marking it by hand would put two different totals
-           in the database. */
         %>
         <ul class="qlist__choices">
           <% for (var c = 0; c < (row.options || []).length; c++) { %>
@@ -427,11 +342,6 @@ BADGE[ST.GRADED] = " badge--graded";
         <div class="gq__verdict">
           <% if (row.unknown) { %>
           <%
-          /* This attempt was handed in before individual choices were stored:
-             the answer was compared to the key and discarded, and only the
-             total survived. Saying so is the only honest option — a blank
-             cell here would read as "the student answered nothing", which is
-             a different and false claim. */
           %>
           <p class="gq__unknown">
             إجابة الطالب لهذا السؤال غير متاحة — سُلّمت هذه الورقة قبل تفعيل حفظ
@@ -455,21 +365,11 @@ BADGE[ST.GRADED] = " badge--graded";
 
         <% } else { %>
         <%
-        /* ---- EXPLAIN: the part a human does ---------------------------- */
         %>
         <div class="gq__written">
           <p class="gq__answer-label">إجابة الطالب</p>
           <% if (row.answered) { %>
           <%
-          /* .gq__written-text is white-space: pre-wrap, so the paragraphs the
-             student typed survive. The interpolation below is the escaping
-             kind, so the answer is text and never markup, however it was
-             typed.
-
-             Do NOT write a literal example of an EJS tag in here: the scanner
-             looks for the closing delimiter lexically, with no notion of
-             JavaScript comments, so the sequence would end this scriptlet
-             mid-sentence and dump the rest of the comment onto the page. */
           %>
           <p class="gq__written-text"><%= row.text %></p>
           <% } else { %>
@@ -497,15 +397,6 @@ BADGE[ST.GRADED] = " badge--graded";
               الدرجة (من <span class="num" dir="ltr"><%= row.maxScore %></span>)
             </label>
             <%
-            /* NOT required: a blank box means "not marked yet", which is what
-               lets a long paper be marked in more than one sitting. Awarding
-               nothing is done by typing 0 — a real mark that moves the paper
-               to "تم التصحيح".
-
-               min/max/step are the browser's copy of the server's rule, not
-               the rule itself: util/grading.applyMarks re-checks every value
-               and refuses the whole save on a breach, because these attributes
-               are trivially bypassed and a mark is a permanent record. */
             %>
             <input
               class="input input--ltr"
@@ -546,21 +437,8 @@ BADGE[ST.GRADED] = " badge--graded";
   </section>
 
   <%
-  /* The save button is rendered only when there is something to save. On a
-     paper with no essay questions this page is a read-only record, and a
-     button that posts an empty round of marks would be a lie about what it
-     does. */
   %>
   <%
-  /* The row exists only when there is something to submit. With no essay
-     questions the page is read-only, and a "form-actions" row holding a single
-     link is not an actions row — it is navigation wearing a button's clothes.
-     The crumbs at the top already point at the queue, with the same href.
-
-     "إلغاء" rather than the old "رجوع للقائمة": the link's job here is to leave
-     without saving, which is what every other form on the dashboard calls
-     إلغاء. Naming the destination as well made it the only secondary action
-     with two jobs, and it duplicated the crumb verbatim. */
   %>
   <% if (essayRows.length) { %>
   <div class="form-actions">

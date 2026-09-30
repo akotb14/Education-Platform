@@ -1,9 +1,5 @@
 <%- include("_head", { active: "homework", title: "الواجبات" }) %>
 <%
-/* Homework list + add form. All markup lives in _assessment-form.ejs, which
-   this page shares with quiz.ejs and exam.ejs — the three were ~500 identical
-   lines each, already rendered from one controller line and already drifted
-   apart. See that file for the unit-picker fix. */
 %>
 <%- include("_assessment-form", { kind: "homework" }) %>
 <%- include("_foot") %>

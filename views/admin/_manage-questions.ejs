@@ -1,71 +1,4 @@
 <%
-/* =========================================================================
-   ONE PAPER'S QUESTIONS — shared by questionsquiz.ejs, questionshomework.ejs
-   and questionsexam.ejs, the way _edit-paper.ejs is shared by the three
-   settings pages.
-
-   THE OTHER HALF OF THE EDIT SPLIT. Everything on this page works on the
-   question list; nothing on it can change the paper's name, its lesson, its
-   window or its duration. Those live on the settings page, and the two are one
-   click apart through the bar at the top.
-
-   Why they are two pages at all: they used to be one form, so an admin fixing
-   a typo in a quiz's name arrived at a page led by a question builder, and an
-   admin adding a question had to re-submit the paper's settings to do it. The
-   two jobs have nothing in common except the paper they belong to, and the
-   combined form made the cheap job carry the expensive one's risk. See the
-   block comment above editPaperGet in controllers/quiz.contro.js.
-
-   FOUR OPERATIONS, four routes, all POST:
-     add     /addQuestionsOf<Kind>/<paperId>        a batch, appended
-     edit    /editQuestionOf<Kind>/<paperId>/<qId>  one question, in place
-     move    /moveQuestionOf<Kind>/<paperId>/<qId>  swap with a neighbour
-     delete  /removeQuestionOf<Kind>/<paperId>/<qId>
-
-   Position is not cosmetic. A student's stored answers and a teacher's awarded
-   marks are keyed by the question's POSITION in this list — degreeQuiz
-   .answers[].index and .writtenAnswers[].index, and nothing anywhere stores a
-   question _id. So moving or deleting a question moves every attempt's data
-   with it; the controller's reindexAttempts is what keeps them together, and
-   it is the reason reordering is a two-button swap rather than a drag-anywhere
-   affordance. One swap is one two-entry permutation, which is auditable.
-
-   ONE MODE AT A TIME, AND THAT IS DELIBERATE.
-   admin.js does `document.querySelector("[data-qbuilder]")` — SINGULAR. Only
-   the first builder on a page is wired: its type switcher, its option
-   repeater, its add and remove buttons. Two builders on one page would leave
-   the second one a dead form whose question-type select changed nothing.
-
-   So this page renders exactly one of them:
-     · no ?edit  — the ADD form, a full builder, plus the list below it;
-     · ?edit=id  — the EDIT form for that one question, and no add form.
-   The way back to adding is a link, not a second builder. Adding a question
-   and rewriting an existing one are also different enough jobs that showing
-   both at once would mostly invite saving the wrong one.
-
-   LOCALS
-     kind        "homework" | "quiz" | "exam"
-     data        the paper
-     question    its questions, in order (array). Read in full here — this is
-                 the page that owns them
-     editId      the question _id open for editing, or "" — already shape-
-                 checked and resolved by the controller
-     editIndex   its position, or -1 when nothing is open
-     csrfToken   string
-     flashOk / flashBad  strings, may be ""
-     formData    a rejected submission to redisplay, or ""
-     maxQuestions  how many questions one submission may carry
-
-   Plus util/questionTypes.viewLocals() and util/grading.viewLocals(), which
-   _question-block.ejs needs and which this page uses for typeOf / optionsOf.
-
-   Every local is read behind a `typeof` guard. EJS compiles the body inside
-   `with(locals)`, so a key the route did not pass is a ReferenceError, and a
-   render error is thrown from inside res.render's callback — after the route's
-   try/catch has already returned. Express then serves its own 500 and the
-   admin loses the page with nothing to explain why. A guard turns that into an
-   empty field.
-   ====================================================================== */
 
 var KIND = typeof kind !== "undefined" && kind ? String(kind) : "homework";
 var paper = typeof data !== "undefined" && data && typeof data === "object" ? data : {};
@@ -80,9 +13,6 @@ var LABEL = { homework: "الواجب", quiz: "الكويز", exam: "الامت�
 var PLURAL = { homework: "الواجبات", quiz: "الكويزات", exam: "الامتحانات" }[KIND] || "الواجبات";
 var LIST_HREF = "/admin/" + KIND;
 
-/* The Kind segment in the route names is capitalised — /editQuestionOfQuiz,
-   not /editQuestionOfquiz. Spelled out per kind rather than built by
-   upper-casing a letter, so every URL this page emits can be grepped for. */
 var R = {
   homework: {
     settings: "/editHomework",
@@ -122,10 +52,6 @@ var SELF = R.questions + "/" + PID;
 
 var existing = typeof question !== "undefined" && Array.isArray(question) ? question : [];
 
-/* Which question is open, if any. The controller has already checked the shape
-   of ?edit and resolved it to a position, so -1 here means "nothing open" and
-   covers the stale-link case too: the question was deleted in another tab, and
-   the honest answer is the list without it rather than an error. */
 var openIdx = typeof editIndex !== "undefined" && Number.isInteger(Number(editIndex))
   ? Number(editIndex)
   : -1;
@@ -134,17 +60,9 @@ var openId = typeof editId !== "undefined" && editId ? String(editId) : "";
 if (!openId) openIdx = -1;
 var isEditing = openIdx !== -1;
 
-/* A rejected submission comes back through flash, because every failure path
-   redirects — right, so a refresh cannot resubmit — and a redirect otherwise
-   renders an empty form. `questions` is parseQuestions' echo: one entry per
-   block that was submitted, in the shape _question-block.ejs reads. */
 var prior = typeof formData !== "undefined" && formData && typeof formData === "object" ? formData : null;
 var priorQuestions = prior && Array.isArray(prior.questions) ? prior.questions : [];
 
-/* ---------------------------------------------------- the type vocabulary ---
-   From util/questionTypes.viewLocals(). Guarded and given the same fallbacks
-   _question-block.ejs uses, so this page still renders if a caller passes only
-   some of them. */
 var QT = typeof typeOf === "function" ? typeOf : function (q) {
   var t = q && q.qType;
   return t === "truefalse" || t === "explain" ? t : "mcq";
@@ -162,25 +80,6 @@ var OPTS = typeof optionsOf === "function" ? optionsOf : function (q) {
 var QLABELS = typeof QTYPE_LABELS !== "undefined" ? QTYPE_LABELS : {};
 var TFOPTS = typeof TF_OPTIONS !== "undefined" ? TF_OPTIONS : ["صح", "خطأ"];
 
-/* ------------------------------------------------- stored question -> block --
-   _question-block.ejs is written against parseQuestions' ECHO shape —
-   { type, question, answers, correct, tf, modelAnswer, maxScore } — where the
-   answer key is an INDEX. A stored question is a different shape: the options
-   live at answer[0] (see the [Array] comment in models/quiz.js) and
-   correctAnswer holds the option's TEXT, because grading is a literal string
-   compare by position.
-
-   So an existing question has to be translated before it can be edited, and
-   this is the only place that does it. Getting it wrong would not throw: the
-   block would render with no radio checked, and saving it would rewrite the
-   question with no answer key at all.
-
-   answers is left EMPTY for truefalse and explain on purpose. The multiple-
-   choice fieldset is rendered for every type (hidden and disabled for the two
-   that do not use it), and prefilling it with a True/False question's own
-   "صح"/"خطأ" would mean that an admin switching that question to multiple
-   choice found those two words waiting as their options. Blank rows are the
-   honest starting point. */
 function asBlock(doc) {
   var t = QT(doc);
   var opts = OPTS(doc);
@@ -201,11 +100,6 @@ function asBlock(doc) {
   };
 
   if (t === "truefalse") {
-    /* TF_OPTIONS is the single definition of these two strings — the form and
-       the grader both read it, so an index resolved through it cannot drift
-       from what is stored. -1 (a paper whose stored text matches neither) comes
-       back as "" and renders with neither radio checked, which is the truthful
-       display of a question that has no usable key. */
     var n = TFOPTS.indexOf(key);
     out.tf = n === -1 ? "" : String(n);
   } else if (t === "mcq") {
@@ -216,15 +110,10 @@ function asBlock(doc) {
   return out;
 }
 
-/* What goes in the open block: what the admin just typed and had rejected, or
-   the stored question. The echo wins — losing an edit to a validation error is
-   the failure this whole flash round-trip exists to prevent. */
 var openBlock = isEditing
   ? (priorQuestions.length ? priorQuestions[0] : asBlock(existing[openIdx]))
   : null;
 
-/* On the ADD form, a rejected submission comes back as however many blocks
-   were sent; a fresh page starts with one. */
 var addBlocks = priorQuestions.length ? priorQuestions : [null];
 
 var ICON = {
@@ -254,9 +143,6 @@ var ICON = {
 </nav>
 
 <%
-/* The same two-way bar the settings page carries, with the current side marked
-   and not linked. It is above the form on both pages so that whichever job the
-   admin came for, they can see the other one exists before they start typing. */
 %>
 <nav class="split-nav" aria-label="تعديل <%= LABEL %>">
   <a class="split-nav__item" href="<%= R.settings %>/<%= PID %>">
@@ -276,28 +162,6 @@ var ICON = {
 
 <% if (isEditing) { %>
 <%
-/* ===================================================== EDIT ONE QUESTION ===
-   Rendered INSTEAD of the add form, for the reason in the header comment: only
-   the first [data-qbuilder] on the page gets wired, so there can be one.
-
-   The block is rendered with i: 0, which is what makes parseQuestions find
-   exactly one question in the body — it scans for names matching q_<n>_question
-   and this form emits only q_0_*. The controller rejects a submission that
-   parses to anything other than one question rather than silently saving the
-   first, so a hand-built POST carrying q_0_ and q_1_ is an error, not a guess.
-
-   data-max="1" is what keeps it to one: admin.js's renumber() runs on load and
-   sets addBtn.disabled = cards >= max, so the add button below arrives disabled
-   and its click handler returns early even if something re-enables it. The
-   button exists at all only because the builder bails out entirely without one
-   (`if (!list || !tpl || !addBtn) return;`) — and bailing out would cost this
-   form its question-type switcher, which is the one thing an edit form cannot
-   do without. It is `hidden` and `disabled` because it has no job here.
-
-   The visible number in the block's legend reads 1 once JS has run — renumber()
-   rewrites every [data-qno] to its position within THIS form, and there is one
-   card in it. The question's real position is in the heading instead, where it
-   is also correct with JS off. */
 %>
 <section class="form-card">
   <h2 class="form-card__title">
@@ -329,7 +193,6 @@ var ICON = {
       <% } %>
 
       <%
-      /* Both required by admin.js and both inert. See the section comment. */
       %>
       <button class="qbuilder__add" type="button" data-qadd hidden disabled>
         <span class="sr-only">إضافة سؤال</span>
@@ -340,8 +203,6 @@ var ICON = {
     <p class="qbuilder__live sr-only" role="status" aria-live="polite" data-qlive></p>
 
     <%
-    /* No `badge`: the badge is the builder's question counter, and "1" on the
-       save button of a form that edits one question says nothing. */
     %>
     <%- include("_form-actions", { act: {
       save: "حفظ السؤال", cancel: SELF,
@@ -351,15 +212,6 @@ var ICON = {
 </section>
 <% } else { %>
 <%
-/* ========================================================= ADD A BATCH =====
-   The same builder and the same _question-block the add-paper form uses, so a
-   question typed here and a question typed there cannot end up validated
-   differently — that divergence is what the combined edit form was written to
-   fix in the first place, and splitting the pages must not bring it back.
-
-   Appended, never replacing: the controller's only write is a $push, so no
-   existing question changes position and no attempt needs remapping. It is the
-   one of the four operations that does not touch reindexAttempts. */
 %>
 <section class="form-card">
   <h2 class="form-card__title">إضافة أسئلة إلى <%= LABEL %></h2>
@@ -411,10 +263,6 @@ var ICON = {
       </div>
 
       <%
-      /* The blueprint admin.js clones. Inside a template the markup is inert —
-         the browser neither validates its `required` fields nor submits them —
-         so it costs nothing until a question is actually added. "__I__" is
-         replaced with the next free index on clone. */
       %>
       <template data-qtemplate>
         <%- include("_question-block", { i: "__I__", pos: "", q: null }) %>
@@ -433,18 +281,6 @@ var ICON = {
 <% } %>
 
 <%
-/* ==================================================== THE QUESTIONS, IN ORDER
-   Read-only rows with their own action forms. OUTSIDE the form above, and it
-   has to be: HTML has no nested forms, so a delete button placed inside the
-   add form would be dropped by the parser and submit the batch instead.
-
-   Cards, not a table. A table of number + question + up to six choices + four
-   actions has no usable phone layout, and the previous stylesheet's answer to
-   that was a 150%-wide table whose last column could not be reached at all.
-
-   The order shown IS the order students see: the paper renders questions by
-   array position, and `no` is only a stored label. Position is also what every
-   attempt's stored answers and marks are keyed by. */
 %>
 <section class="panel qlist-panel">
   <div class="panel__head">
@@ -481,9 +317,6 @@ var ICON = {
       <div class="qlist__head">
         <span class="qlist__no num" dir="ltr"><%= n + 1 %></span>
         <%
-        /* A question with no text is a real state — an old row, or one saved
-           before the text was required. Said out loud rather than left as an
-           empty line, which would read as a rendering fault. */
         %>
         <p class="qlist__q"><%= it.question || "(بدون نص)" %></p>
         <span class="qlist__type"><%= QLABELS[qKind] || qKind %></span>
@@ -491,8 +324,6 @@ var ICON = {
 
       <% if (qKind === "explain") { %>
       <%
-      /* No answer key to show: nothing here is machine-checkable. The model
-         answer is what the marker reads, so that is what the row shows. */
       %>
       <% if (it.modelAnswer) { %>
       <p class="qlist__model">
@@ -508,8 +339,6 @@ var ICON = {
       <ul class="qlist__choices">
         <% qOpts.forEach(function (opt) { %>
         <%
-        /* The key is stored as the option's TEXT, so the match is on text —
-           the same comparison the grader makes. */
         %>
         <li class="<%= qKey !== "" && opt === qKey ? "is-correct" : "" %>">
           <span class="qlist__choice"><%= opt %></span>
@@ -530,21 +359,6 @@ var ICON = {
       <% } %>
 
       <%
-      /* THE ROW ACTIONS. Four separate forms and one link, side by side —
-         siblings, never nested, for the same reason the whole section sits
-         outside the add form.
-
-         Up and down are POST, not GET links: they change stored data, and they
-         move every attempt's answers with the question (reindexAttempts). A GET
-         that reorders a paper is one a crawler or a link prefetch can trigger.
-         Disabled at the ends as a courtesy — the controller also treats an
-         out-of-range move as a silent no-op, because `disabled` is a browser
-         convention and absent from a hand-built request.
-
-         Delete carries data-confirm, which admin.js turns into a confirm()
-         before submitting. Progressive enhancement: with JS off the form still
-         submits, it just does not ask first. The protection that matters —
-         POST, the CSRF token, the isAdmin guard — is all server-side. */
       %>
       <div class="qlist__actions">
         <form method="post" action="<%= R.move %>/<%= PID %>/<%= qId %>">
@@ -582,10 +396,6 @@ var ICON = {
         </form>
 
         <%
-        /* Editing is a GET — a state of this page, carried in the query string,
-           so the list stays on screen around the open block and the admin can
-           see where the question they are changing sits. aria-current marks the
-           one that is open. */
         %>
         <a
           class="btn btn--ghost btn--sm"

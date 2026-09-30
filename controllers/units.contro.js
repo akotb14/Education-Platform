@@ -23,26 +23,6 @@ const getData = async (req, res) => {
         ? getmonthofuser.month
         : [];
 
-    /* The admin sees every month of every grade, unlocked.
-
-       Not a convenience: it is the only way the admin can reach the content
-       at all. addAdmin (app.js) creates the admin document with fullName,
-       phoneNumber, cardNumber, password and admin:"true" — and nothing else.
-       No educetionlevel, no grade, no month array. So for an admin:
-
-         · month.ejs skipped EVERY row, because it compares each row's
-           educetionlevel against the signed-in user's, and undefined never
-           equals "biology". The page rendered as "this is not your grade"
-           for all six subject/grade combinations.
-         · `unlocked` was [] regardless, so nothing would have been open even
-           if the rows had survived the filter.
-         · isMonth answered a bare 404 for every /lessons/… and /content/…
-           URL, since Array.isArray(undefined) is false.
-
-       Read off the DATABASE document, not the JWT claim. Both carry the flag
-       — util/aurth.js trusts the claim — but the doc is already loaded here,
-       and a cookie minted before an admin was demoted still claims
-       admin:"true" until it expires. The doc is the current answer. */
     const unlockAll = !!(getmonthofuser && getmonthofuser.admin == "true");
 
     res.render("month.ejs", {
@@ -68,17 +48,11 @@ const addlesson = async (req, res, next) => {
     const monthName = req.body.month;
     const unitName = (req.body.unit || "").trim();
 
-    /* The form marks all four required, but a POST can arrive from anywhere.
-       Without this, Units.addlesson happily pushed a row with undefined fields
-       — an unnamed lesson in no month, which then appeared in every unit picker
-       as a blank option. */
     if (!educetionlevel || !grade || !monthName || !unitName) {
       req.flash("lessonBad", "اختر المادة والصف والشهر واكتب اسم الدرس.");
       return res.redirect("/lesson");
     }
 
-    /* A duplicate name inside the same month makes the two rows
-       indistinguishable in the unit picker. */
     const existing = await Unit.getModel().findOne({
       educetionlevel: educetionlevel,
       grade: grade,
@@ -105,8 +79,6 @@ const addlesson = async (req, res, next) => {
       month: monthName,
     });
     if (!checkMonth) {
-      /* Was `newMonth.save()` with no await — the redirect could be sent, and
-         the process could in principle exit, before the write landed. */
       await new month({
         educetionlevel: educetionlevel,
         grade: grade,
@@ -117,8 +89,6 @@ const addlesson = async (req, res, next) => {
     req.flash("lessonOk", `تمت إضافة درس «${unitName}».`);
     res.redirect("/lesson");
   } catch (err) {
-    /* Was `console.log(err); res.sendStatus(400)` — a server-side failure
-       reported to the admin as a bare 400 with no body. */
     next(err);
   }
 };
@@ -132,7 +102,6 @@ const getlesson = async (req, res, next) => {
 
     res.render("admin/lesson.ejs", {
       lesson: lesson,
-      /* The per-row delete is a POST form now, so the page needs a token. */
       csrfToken: req.csrfToken ? req.csrfToken() : "",
       flashOk: okFlash.length ? okFlash[0] : "",
       flashBad: badFlash.length ? badFlash[0] : "",

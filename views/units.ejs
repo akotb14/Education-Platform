@@ -6,24 +6,6 @@
     <meta name="theme-color" content="#fe3f40" />
 
     <%
-      /* =====================================================================
-         This view has TWO renderers and they pass different shapes:
-
-           routes/units.router.js  /lessons/:educetionlevel/:grade/:month
-               { data: [Unit docs], edu, grade, month, d, degreeHome }
-
-           controllers/units.contro.js  getContent, mounted at
-           /:edu/:grade/:month/:unit
-               { data: <single unit sub-doc or "">, url }
-
-         The second passes no edu/grade/month at all, so every local is read
-         through a typeof guard. Under EJS's `with(locals)` an unguarded
-         reference to a key that was never passed is a ReferenceError, which
-         would turn that route into a 500 the moment it reached real markup.
-         Guarded, it degrades to the empty state instead.
-
-         `d` and `degreeHome` are passed by the lessons route and used by
-         neither renderer — deliberately not referenced here. */
       var SUBJECTS = { biology: "الأحياء", geology: "الجيولوجيا" };
       var GRADES = {
         "1st": "الصف الأول الثانوي",
@@ -34,28 +16,14 @@
       var eduRaw   = typeof edu   !== "undefined" && edu   ? String(edu)   : "";
       var gradeRaw = typeof grade !== "undefined" && grade ? String(grade) : "";
 
-      /* isMonth gates this route on user.month.includes(req.params.month), so
-         by the time we render, month is always a value an admin created — not
-         free text from the address bar. Still escaped on output. */
       var monthName = typeof month !== "undefined" && month ? String(month) : "";
 
       var subjectName = SUBJECTS[eduRaw] || "";
       var gradeName = GRADES[gradeRaw] || "";
 
-      /* Only built when both halves are in the whitelists, so the URL cannot
-         be steered by a crafted param. Falls back to the homepage. */
       var monthsHref =
         SUBJECTS[eduRaw] && GRADES[gradeRaw] ? "/" + eduRaw + "/" + gradeRaw : "/";
 
-      /* --------------------------------------------------------------------
-         Flatten every Unit doc's `units` array down to the rows for THIS
-         month. Same predicate the old template used
-         (month == data[i]['units'][j].month), just hoisted out of the markup.
-
-         Unit.addlesson keeps one Unit doc per (educetionlevel, grade) and
-         $pushes every month's rows into its `units` array, so `data` is
-         normally a single document and the outer loop runs once. It still
-         iterates defensively — older data may have more than one. */
       var docs = (typeof data !== "undefined" && Array.isArray(data)) ? data : [];
       var units = [];
       for (var i = 0; i < docs.length; i++) {
@@ -68,17 +36,9 @@
           units.push({
             id: u._id,
             title: u.unit,
-            /* Every segment of the link below comes from the stored document,
-               not from req.params — so no request parameter ever reaches an
-               href on this page. On the normal path they are equal anyway
-               (the route queries Unit by exactly this edu/grade), but sourcing
-               them from the record means a subject added later still links
-               correctly even though SUBJECTS above does not know its name. */
             edu: doc.educetionlevel || eduRaw,
             grade: doc.grade || gradeRaw,
             month: u.month,
-            /* `lesson` holds a Google Drive FILE ID, not prose — lesson.ejs
-               embeds it as /file/d/<id>/preview. Presence means "has video". */
             hasVideo: !!(u.lesson && String(u.lesson).trim()),
             hasPdf: !!(u.pdf && String(u.pdf).trim()),
             hasQuiz: !!u.quizId
@@ -86,10 +46,6 @@
         }
       }
 
-      /* No ordering field exists on a unit row, so insertion order IS the
-         teacher's own ordering — preserved, and numbered by position. (The
-         months page sorts instead, because month names come from a fixed
-         vocabulary; unit titles are free text and have no canonical order.) */
     %>
 
     <meta name="robots" content="noindex, nofollow" />
@@ -104,9 +60,6 @@
 
     <link rel="icon" type="image/png" href="/assets/images/logo.png" />
 
-    <!-- Set before the stylesheets so .reveal elements never flash visible.
-         CSS keeps content visible unless this class is present, so a JS
-         failure leaves a readable page rather than a blank one. -->
     <script>
       document.documentElement.classList.add("js");
     </script>
@@ -171,7 +124,6 @@
     </header>
 
     <main id="main">
-      <!-- ======================================================= page hero -->
       <section class="page-hero">
         <div class="container page-hero__inner">
           <nav class="crumbs" aria-label="مسار التصفح">
@@ -191,8 +143,6 @@
             </ol>
           </nav>
 
-          <!-- The page had no usable h1: the old heading was an h2 reading
-               "المتاح" sitting above a level-1 heading that was always empty. -->
           <h1 class="page-hero__title">
             <% if (monthName) { %>دروس <em><%= monthName %></em><% } else { %>
             <em>الدروس</em><% } %>
@@ -227,7 +177,6 @@
         </div>
       </section>
 
-      <!-- ========================================================== units -->
       <section class="section">
         <div class="container">
           <% if (!units.length) { %>
@@ -264,8 +213,6 @@
                 <div class="card__body">
                   <h2 class="tile__title"><%= t.title %></h2>
 
-                  <!-- Presence badges. A student could not tell what was in a
-                       unit without opening it; every card looked identical. -->
                   <div class="tile__badges">
                     <% if (t.hasVideo) { %>
                     <span class="badge badge--video">

@@ -1,47 +1,9 @@
 <%
-/* =========================================================================
-   ADMIN SHELL — TOP HALF.  Pairs with _foot.ejs, which closes what this
-   opens. Every view in views/admin/ is an include of _head, then the page
-   content, then an include of _foot.
-
-   NOTE for whoever edits this header: do NOT write a literal example of an
-   include tag in here. EJS scans for the closing delimiter lexically, with no
-   notion of JavaScript comments, so a "percent greater-than" sequence inside
-   this block ends the scriptlet on that line and everything below it is
-   emitted as raw text. That is exactly what happened the first time.
-
-   WHAT THIS REPLACES
-   The 13-item sidebar was copy-pasted into all 14 admin views — roughly 110
-   identical lines each, ~1,500 lines of duplication. It had already drifted:
-   addbank.ejs carried a 14th item ("Add Banks" -> /addBank) present in no
-   other view and pointing at a route that does not exist, and quiz.ejs's
-   script tag was missing the `admin/` path segment, so its menu toggle was
-   dead. One file now, so the next drift is impossible.
-
-   LOCALS
-     active  String  key of the current nav item, drives aria-current.
-                     Optional; an unknown or missing value highlights nothing.
-     title   String  topbar heading and <title>. Optional.
-
-   Both are read behind typeof guards. EJS compiles with `with(locals)`, so an
-   unguarded reference to a key the caller did not pass throws a
-   ReferenceError rather than yielding undefined — the guards are what let 14
-   callers pass different things to one partial.
-
-   PATHS are root-relative. The old views used "../admin/dashboard/assets/..."
-   which only resolved from a one-segment URL; at a two-segment URL such as
-   /showStudentsDegree/quiz the same string resolved to
-   /showStudentsDegree/admin/... and 404'd, silently unstyling the page.
-   ====================================================================== */
 
 var activeKey = typeof active !== "undefined" && active ? String(active) : "";
 var pageTitle =
   typeof title !== "undefined" && title ? String(title) : "لوحة التحكم";
 
-/* Icons inline as currentColor SVG. The old shell pulled ionicons 5.5.2 from
-   unpkg via two <script> tags on every admin page: a third-party
-   render-blocking request for a dozen glyphs, which also meant the whole
-   navigation was iconless whenever unpkg was slow, blocked or offline. */
 var ICONS = {
   home: "M12 3 2 12h3v9h6v-6h2v6h6v-9h3L12 3Z",
   grid: "M3 3h8v8H3V3Zm10 0h8v8h-8V3ZM3 13h8v8H3v-8Zm10 0h8v8h-8v-8Z",
@@ -57,8 +19,6 @@ var ICONS = {
     "M9 2h6a1 1 0 0 1 1 1v1h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V3a1 1 0 0 1 1-1Zm0 3v1h6V5H9Zm-2 6v2h10v-2H7Zm0 4v2h7v-2H7Z",
   book: "M4 3h11a3 3 0 0 1 3 3v15H7a3 3 0 0 1-3-3V3Zm2 2v13a1 1 0 0 0 1 1h9V6a1 1 0 0 0-1-1H6Z",
   chart: "M3 21V3h2v16h16v2H3Zm4-4V10h3v7H7Zm5 0V6h3v11h-3Zm5 0v-5h3v5h-3Z",
-  /* A tick inside a document — manual marking, distinct from the bare bar
-     chart the three degrees lists share. */
   check:
     "M5 3h11l4 4v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm5.6 15.4 7-7-1.4-1.4-5.6 5.6-2.6-2.6L6.6 14.4l4 4Z",
   plus: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z",
@@ -66,9 +26,6 @@ var ICONS = {
   out: "M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5v-2H5V5h5V3Zm4.5 3.5L13 8l3 3H8v2h8l-3 3 1.5 1.5L20 12l-5.5-5.5Z"
 };
 
-/* Rendered from data, and grouped: 13 flat links read as one undifferentiated
-   column, which is how the old sidebar interleaved "Quiz" with "show Quiz
-   Degree" and made both harder to find. */
 var NAV = [
   {
     group: "عام",

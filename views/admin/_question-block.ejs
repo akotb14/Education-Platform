@@ -1,80 +1,4 @@
 <%
-/* ======================================================================
-   ONE QUESTION BLOCK — used twice, from the same source.
-
-     · once per existing question when the form is re-rendered after a
-       validation error, and once for the initial empty question;
-     · once inside a <template>, with i = "__I__", which admin.js clones
-       and renumbers to add a question in the browser.
-
-   Rendering both from this file is the point: a repeater whose "add"
-   markup is a separate hand-written copy drifts from the server-rendered
-   one the first time a field changes, and the drift shows up as a field
-   that silently posts nothing.
-
-   FIELD NAMING. Flat and indexed — q_0_type, q_0_question, q_0_a0 …
-   q_0_a5, q_0_correct, q_0_tf, q_0_model, q_0_image. NOT q[0][question].
-   app.js parses bodies with express.urlencoded({ extended: false }),
-   which is the querystring module and does no bracket nesting at all,
-   and this form is multipart so multer parses it instead — multer has no
-   nesting option either. Bracket names would arrive as literal keys
-   named "q[0][question]".
-
-   Gaps are fine BETWEEN BLOCKS. Removing a block in the browser leaves
-   its index unused and the server skips it, so nothing has to renumber
-   the name attributes as blocks come and go — only the visible label
-   changes.
-
-   Gaps are NOT fine WITHIN a block's option rows, and this is the one
-   place the two contracts differ. The server reads q_<i>_a0 … a5 in
-   ascending index order and that order becomes the saved option order,
-   so a row sitting last on screen under a low free index (a2, when
-   a0/a1/a5 exist) would be saved first. admin.js therefore renumbers the
-   option rows contiguously on every add and remove.
-
-   ----------------------------------------------------------------------
-   QUESTION TYPES, and the one trap in this file.
-
-   Three fieldsets, one per type, of which exactly one is active. Hiding
-   the other two is NOT enough: the choice inputs and the answer radio
-   carry `required`, and a `required` control that is display:none makes
-   the browser refuse to submit on an element it cannot scroll to or
-   focus. Chrome logs "An invalid form control with name='…' is not
-   focusable" and THE SAVE BUTTON SILENTLY DOES NOTHING — no message, no
-   network request, nothing on screen to explain it.
-
-   So an inactive group is `disabled`, not merely hidden. disabled both
-   exempts a control from validation and stops it being submitted, which
-   also means the server never receives stale fields from a type the
-   admin switched away from.
-
-   That state is rendered HERE, server-side, from the block's own type —
-   so the form is correct on arrival and works with JavaScript off.
-   admin.js only ever flips a state that was already consistent.
-
-   Because the browser drops disabled fields entirely, the server keys
-   off q_<i>_type and not off which fields happen to be present.
-
-   LOCALS
-     i    index for the name attributes: a number, or "__I__" in template
-     pos  the number shown to the admin (1-based), or "" in the template
-     q    echo of a rejected submission, or null:
-          { type, question, answers: [], correct, tf, modelAnswer,
-            maxScore }
-
-   Plus the shared type locals from util/questionTypes.viewLocals():
-     QTYPES, QTYPE_LABELS, QTYPE_HINTS, TF_OPTIONS, MIN_OPTIONS,
-     MAX_OPTIONS, typeOf
-   and the Explain mark bounds from util/grading.viewLocals():
-     DEFAULT_EXPLAIN_POINTS, MIN_POINTS, MAX_POINTS
-
-   EJS CANNOT require(). A template compiles to a function with no module
-   scope, so `require` in here is undefined and throws at render time —
-   the constants have to arrive as locals. Every one is read behind a
-   `typeof` guard because EJS compiles with `with(locals)`, where naming
-   a key the caller did not pass throws ReferenceError instead of giving
-   undefined. The fallbacks below keep this partial renderable on its own.
-   ====================================================================== */
 
 var TYPES = typeof QTYPES !== "undefined" ? QTYPES : ["mcq", "truefalse", "explain"];
 var LABELS = typeof QTYPE_LABELS !== "undefined" ? QTYPE_LABELS : {};
@@ -84,18 +8,12 @@ var MINOPT = typeof MIN_OPTIONS !== "undefined" ? MIN_OPTIONS : 2;
 var MAXOPT = typeof MAX_OPTIONS !== "undefined" ? MAX_OPTIONS : 6;
 var DEFOPT = typeof DEFAULT_OPTIONS !== "undefined" ? DEFAULT_OPTIONS : 4;
 
-/* Explain-only mark bounds, from util/grading.viewLocals(). Same inline
-   fallbacks as everything else here, so this partial still renders when a
-   caller passes only the question-type locals. */
 var DEFPTS = typeof DEFAULT_EXPLAIN_POINTS !== "undefined" ? DEFAULT_EXPLAIN_POINTS : 5;
 var MINPTS = typeof MIN_POINTS !== "undefined" ? MIN_POINTS : 1;
 var MAXPTS = typeof MAX_POINTS !== "undefined" ? MAX_POINTS : 100;
 
 var qq = q && typeof q === "object" ? q : {};
 
-/* The echo names the field `type`; a stored document names it `qType`.
-   Read whichever is present, and land on "mcq" for anything unrecognised
-   — exactly how the server will read it back. */
 var rawType = qq.type || qq.qType;
 var qType = TYPES.indexOf(rawType) !== -1 ? rawType : "mcq";
 
@@ -103,28 +21,15 @@ var qAnswers = Array.isArray(qq.answers) ? qq.answers : [];
 var qCorrect = qq.correct === undefined || qq.correct === null ? "" : String(qq.correct);
 var qTf = qq.tf === undefined || qq.tf === null ? "" : String(qq.tf);
 
-/* The echo and a stored document use the same name here, so one read covers
-   both — the echo carries the raw string the admin typed (so a rejected
-   submission comes back with it verbatim, even if it was out of range), and a
-   document carries the saved number. Falls back to the default, which is also
-   what an Explain question saved before this field existed reads as. */
 var qMax = qq.maxScore === undefined || qq.maxScore === null || String(qq.maxScore).trim() === ""
   ? String(DEFPTS)
   : String(qq.maxScore).trim();
 
-/* Always render at least MIN_OPTIONS rows so a fresh block is usable
-   without JavaScript, and never more than MAX_OPTIONS. */
-/* A fresh block starts at DEFAULT_OPTIONS (the historical 4); a rejected
-   one comes back with exactly as many rows as were submitted. Clamped
-   both ways so a hand-edited echo cannot render 0 rows or 40. */
 var optionCount = Math.min(
   MAXOPT,
   Math.max(MINOPT, qAnswers.length || DEFOPT)
 );
 
-/* Attributes for the two inactive groups. `hidden` is the attribute, not
-   a class: it needs no stylesheet to work, which matters because this
-   markup must behave correctly before admin.css is even considered. */
 var groupAttrs = function (name) {
   return qType === name ? "" : " hidden";
 };
@@ -139,8 +44,6 @@ var groupDisabled = function (name) {
   </legend>
 
   <%
-  /* type="button" matters: a <button> inside a form defaults to type
-     submit, so an unadorned remove button would post the whole form. */
   %>
   <button class="qcard__remove" type="button" data-qremove>
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -151,10 +54,6 @@ var groupDisabled = function (name) {
   </button>
 
   <%
-  /* .select, not .input — the two are sized identically but only .select
-     carries the arrow padding and cursor: pointer, so a <select class="input">
-     is a dropdown that does not look clickable. --lg is the width cap that
-     used to be a `max-inline-size` on the control itself in admin.css. */
   %>
   <div class="form-field form-field--lg qcard__type">
     <label class="label" for="q_<%= i %>_type">نوع السؤال</label>
@@ -171,9 +70,6 @@ var groupDisabled = function (name) {
       <% }); %>
     </select>
     <%
-    /* Every hint is rendered and all but one hidden, rather than swapped
-       by JS from a data attribute — the select works without JS, so the
-       hint has to be correct without JS too. */
     %>
     <% TYPES.forEach(function (t) { %>
     <p class="field-hint" data-qhint="<%= t %>"<%= groupAttrs(t) %>>
@@ -187,8 +83,6 @@ var groupDisabled = function (name) {
       نص السؤال <abbr title="مطلوب">*</abbr>
     </label>
     <%
-    /* Outside the per-type groups on purpose: every type has question
-       text, so switching type must never clear what was typed here. */
     %>
     <textarea
       class="input qcard__question"
@@ -202,7 +96,6 @@ var groupDisabled = function (name) {
   </div>
 
   <%
-  /* ---- MULTIPLE CHOICE ------------------------------------------- */
   %>
   <fieldset
     class="qfields"
@@ -227,14 +120,6 @@ var groupDisabled = function (name) {
       <% for (var c = 0; c < optionCount; c++) { %>
       <div class="qchoice<%= qCorrect === String(c) ? " qchoice--correct" : "" %>" data-qchoice>
         <%
-        /* The radio carries the answer key by INDEX; the server resolves
-           it to the choice's text. It used to be a free-text box that
-           had to match one of the choices character-for-character, and
-           because grading compares literally, a stray space there scored
-           every student zero on the question with nothing on the admin
-           side to show why. correctAnswer is still STORED as the text,
-           so student-side grading and every existing paper are
-           untouched — only the way it is picked has changed. */
         %>
         <input
           class="qchoice__radio"
@@ -275,11 +160,6 @@ var groupDisabled = function (name) {
   </fieldset>
 
   <%
-  /* ---- TRUE / FALSE ----------------------------------------------
-     Two radios, and nothing else. The option TEXT never appears as an
-     input: it is qt.TF_OPTIONS on the server, so the labels here and the
-     stored answer key cannot drift apart. This posts an index (0 or 1)
-     for the same reason multiple choice does. */
   %>
   <fieldset
     class="qfields"
@@ -310,11 +190,6 @@ var groupDisabled = function (name) {
   </fieldset>
 
   <%
-  /* ---- EXPLAIN ----------------------------------------------------
-     No answer key: nothing here is machine-checkable. The model answer
-     is for whoever marks it, and is optional — so no `required`, which
-     also means this group is the one that would submit fine even if the
-     disabled handling above were wrong. */
   %>
   <fieldset
     class="qfields"
@@ -323,16 +198,6 @@ var groupDisabled = function (name) {
     <legend class="sr-only">تصحيح السؤال المقالي</legend>
 
     <%
-    /* The mark this question is worth. ONLY Explain questions have one:
-       auto-graded questions are worth exactly one mark and ignore the field
-       even if a hand-crafted POST sets it, so the input lives inside this
-       fieldset — which the browser leaves out of the submission entirely
-       while another type is selected.
-
-       NOT `required`, on purpose. A required control inside a hidden group is
-       the trap documented at the top of this file, and there is no need to
-       take the risk: a blank value falls back to the same default the
-       schema uses. */
     %>
     <div class="form-field form-field--sm qcard__max">
       <label class="label" for="q_<%= i %>_max">درجة السؤال</label>

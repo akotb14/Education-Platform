@@ -1,39 +1,5 @@
 <%- include("_head", { active: "online", title: "طلبات الانضمام" }) %>
 <%
-/* =========================================================================
-   ONLINE / JOIN-REQUEST LIST
-
-   These are rows from the `studentOnline` collection — people who filled in
-   the "ارسال البيانات" form on the login page. They are NOT platform accounts
-   yet: the model has no `password` and no `admin` field, so nobody in this
-   table can log in. The old page called them "User Online", which reads as
-   "currently signed in" and is the opposite of what the table holds.
-
-   WHAT THE OLD PAGE DID
-     · Was 384 lines for one 7-column table, because every tag was separated by
-       a blank line and 110 of those lines were the copy-pasted sidebar.
-     · Delete was a GET link (`/removeStudentOnline/:id`) styled with inline
-       `background-color: brown`, and that route had NO isAdmin guard — it was
-       reachable by anyone who knew an id. Now a POST with the guard restored.
-     · Printed raw `undefined` for every field a request left blank.
-     · Referenced `var(--white)`, which its stylesheet never defines.
-     · Offered no way to get from a request to an actual student account; the
-       admin had to retype all five fields into the add-student form by hand.
-       The "إضافة كطالب" action carries them across as query parameters, and
-       /addStudent now reads them and pre-fills every box.
-
-   LOCALS
-     student  Array of { fullName, educetionlevel, grade, phoneNumber,
-                         group, cardNumber, _id }
-
-     Named `student` (singular) for an array, which is what the route has
-     always passed. `students` is accepted too so the local can be renamed on
-     the route side later without breaking this view in between.
-
-     Plus the shared filter locals from util/tableFilters.viewLocals():
-     f, GROUPS, GRADES, SUBJECTS, SORTS, GROUP_LABEL, GRADE_LABEL,
-     SUBJECT_LABEL, qs — passed straight to _table-toolbar.ejs.
-   ====================================================================== */
 
 var rows = [];
 if (typeof student !== "undefined" && Array.isArray(student)) {
@@ -47,8 +13,6 @@ var FS =
     ? f
     : { group: "", grade: "", level: "", sort: "", q: "", active: false, touched: false };
 
-/* Label maps arrive as locals now — this page used to carry its own third
-   copy, written as a flat object while users.ejs derived one from an array. */
 var GRADE_MAP = typeof GRADE_LABEL !== "undefined" && GRADE_LABEL ? GRADE_LABEL : {};
 var SUBJECT_MAP = typeof SUBJECT_LABEL !== "undefined" && SUBJECT_LABEL ? SUBJECT_LABEL : {};
 var GROUP_MAP = typeof GROUP_LABEL !== "undefined" && GROUP_LABEL ? GROUP_LABEL : {};
@@ -60,9 +24,6 @@ var ICON = {
   plus: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"
 };
 
-/* Prefill /addStudent from a request. Every value is encodeURIComponent'd: an
-   Arabic full name in a query string must be percent-encoded, and a name
-   containing & would otherwise split into two parameters. */
 var signHref = function (st) {
   var parts = [];
   var add = function (k, v) {
@@ -79,8 +40,6 @@ var signHref = function (st) {
 %>
 
 <%
-/* The same toolbar the roster and the degrees pages use. This page had no
-   filtering at all before — `find({})` and whatever order Mongo returned. */
 %>
 <%- include("_table-toolbar", { action: "/admin/studentOnline", search: true }) %>
 

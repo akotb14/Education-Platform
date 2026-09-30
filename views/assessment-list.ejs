@@ -6,74 +6,6 @@
     <meta name="theme-color" content="#fe3f40" />
 
     <%
-      /* =====================================================================
-         SHARED ASSESSMENT LIST — replaces views/openExam.ejs,
-         views/showQuizEg.ejs and views/openHomework.ejs.
-
-         Those three files were the same page written three times: identical
-         Bootstrap `.row.g-5` of `.service-item` cards, identical footer,
-         identical right-click block, identical 600 KB of jQuery + Bootstrap +
-         owl-carousel + imagesloaded — differing only in which collection they
-         looped over and how badly they got the matching wrong.
-
-         WHAT EACH COPY GOT WRONG (all reproduced before rewriting):
-
-         openExam.ejs
-           · `k = degree.find(...) || ""` then `k.totalDegree` — on a miss `k`
-             is the empty string, so this printed "undefined/12" for every exam
-             the student had never sat.
-           · The closed-exam branch linked every student to /showAnswer for an
-             exam they may never have attempted. The gate added to
-             showAnswer.router.js now refuses that, but the LINK was still
-             offered — an invitation to a 403.
-           · An exam whose window had not opened yet matched neither branch, so
-             it rendered nothing at all: no card, no "opens on" date, no
-             explanation. Students could not tell a missing exam from a future
-             one.
-           · The open branch computed `che` and compared `i._id == che` to hide
-             the start link once attempted, but the isCheck=='1' arm was an
-             EMPTY block — so a student mid-attempt saw no way back in.
-
-         showQuizEg.ejs
-           · Looped over `degree` (the student's ATTEMPTS), so a quiz was
-             invisible until attempted. `quizzes` was passed by the route and
-             never used — the data needed to fix it was already there.
-           · Three levels of null guard (`i != null`, `i.quiz != null`) to work
-             around populate() returning null for a deleted paper, and still
-             read `i.quiz.quiz.length` unguarded.
-
-         openHomework.ejs
-           · Emitted cards from inside nested .find() callbacks; the outer
-             callback returned nothing so .find() never stopped and produced a
-             duplicate card per matching degree.
-           · Guarded on `loy` (a unit with SOME homework) but dereferenced
-             `lo['homeId']` (the unit matching the QUIZ) — "Cannot read
-             properties of undefined (reading 'nameQuiz')", a hard 500 since
-             render errors bypass the route's catch.
-           · Matched on `val.quizId`, so homework only appeared once the student
-             had attempted the unrelated quiz sitting in the same unit.
-
-         All three now render from one `items` array built server-side.
-
-         LOCALS
-           kind      "exam" | "quiz" | "homework"   (whitelisted below)
-           items     array of:
-                       id        String   paper _id
-                       name      String   paper title
-                       month     String   optional chip
-                       unit      String   optional badge
-                       subject   String   optional chip
-                       total     Number   question count
-                       state     "open" | "soon" | "closed" | "untimed"
-                       started   Boolean  an attempt row exists
-                       submitted Boolean  totalDegree is set
-                       score     Number|null
-                       opensAt   String|null  display only
-                       closesAt  String|null  display only
-
-         Every local is read behind a typeof guard, so a caller that omits one
-         gets a sane default rather than an EJS ReferenceError — that is what
-         lets three routes share this file. */
 
       var kindRaw = typeof kind !== "undefined" && kind ? String(kind) : "quiz";
 
@@ -110,9 +42,6 @@
         }
       };
 
-      /* Whitelisted through the map rather than interpolated: `kind` reaches a
-         URL below, and a route passing something unexpected must fall back
-         rather than emit a broken path. */
       var K = KINDS[kindRaw] || KINDS.quiz;
 
       var list = typeof items !== "undefined" && Array.isArray(items) ? items : [];
@@ -256,7 +185,7 @@
                 </div>
               </div>
 
-              <% /* STATE PILL — exam list shows the window, quiz/homework don't */ %>
+              <%  %>
               <% if (card.state === "open") { %>
               <span class="as-card__state as-card__state--open">
                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -291,7 +220,6 @@
               <% } %>
 
               <% if (card.submitted) { %>
-              <!-- Graded. Show the score and a link to the key. -->
               <div class="as-card__score<%= card.score != null && card.total > 0 && card.score / card.total < 0.5 ? " as-card__score--low" : "" %>">
                 <span class="as-card__score-value" dir="ltr">
                   <% if (card.score != null) { %><%= card.score %><% } else { %>—<% } %>
@@ -312,7 +240,6 @@
               </div>
 
               <% } else if (card.state === "open" || card.state === "untimed") { %>
-              <!-- Open window (exam) or untimed (quiz/homework). Offer start or resume. -->
               <% if (!card.started) { %>
               <p class="as-card__note">
                 <span class="num"><%= card.total %></span> سؤال
@@ -332,12 +259,9 @@
               </div>
 
               <% } else if (card.state === "soon") { %>
-              <!-- Future exam, no action available yet. -->
               <p class="as-card__note">لم يبدأ بعد</p>
 
               <% } else if (card.state === "closed") { %>
-              <!-- Closed exam the student never sat — no score, no link. The old
-                   page offered /showAnswer to everyone; the gate refuses it. -->
               <p class="as-card__note">انتهى <%= K.a %></p>
               <% } %>
             </li>

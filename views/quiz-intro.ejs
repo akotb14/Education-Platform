@@ -6,34 +6,6 @@
     <meta name="theme-color" content="#fe3f40" />
 
     <%
-      /* =====================================================================
-         SHARED INTRO PAGE — replaces views/startQuiz.ejs, views/quiz/
-         startQuiz.ejs and views/homework/startQuiz.ejs.
-
-         Those three files were byte-identical apart from one line of English
-         rules text. Each was a copy of the same CodingNepal demo template,
-         complete with three <!DOCTYPE html> declarations and two entire
-         concatenated documents (the first an empty <title>Document</title>
-         stub), lang="en", and the title "Awesome Quiz App | Programminf
-         w/Shadab". They are left on disk, unreferenced, so reverting is a
-         one-line change in each route.
-
-         Rendered by:
-           routes/exam.router.js      GET /startQuiz/:nameQuiz   kind "exam"
-           routes/quiz.router.js      GET /quiz/:name            kind "quiz"
-           routes/homework.router.js  GET /homework/:name        kind "homework"
-
-         LOCALS
-           kind         "quiz" | "exam" | "homework"
-           paper        the quiz document, or null when it could not be loaded
-           alreadyTaken truthy when this student has already submitted
-           backHref     where the exit link goes
-
-         Every local is read through a typeof guard. Under EJS's `with(locals)`
-         an unguarded reference to a key that was never passed is a
-         ReferenceError, which turns the route into a 500 the moment it reaches
-         real markup — so the guards are what let all three callers share one
-         file even if one of them is later changed to pass less. */
 
       var kindRaw = typeof kind !== "undefined" && kind ? String(kind) : "quiz";
 
@@ -42,7 +14,6 @@
         exam:     { label: "امتحان", a: "الامتحان", verb: "ابدأ الامتحان" },
         homework: { label: "واجب",  a: "الواجب",   verb: "ابدأ حل الواجب" }
       };
-      /* Whitelisted: an unknown kind falls back rather than printing itself. */
       var K = KINDS[kindRaw] || KINDS.quiz;
 
       var doc = (typeof paper !== "undefined" && paper && typeof paper === "object") ? paper : null;
@@ -52,10 +23,6 @@
       var taken = typeof alreadyTaken !== "undefined" && !!alreadyTaken;
       var exitHref = typeof backHref !== "undefined" && backHref ? String(backHref) : "/";
 
-      /* quizTime is stored as "HH:MM" and read back by the routes with
-         split(":") — see routes/quiz.router.js. Homework is untimed, and the
-         old page told every student "5 Minutes per each question" regardless,
-         which was true of none of the three. */
       var timeText = "";
       if (kindRaw !== "homework" && doc && doc.quizTime) {
         var parts = String(doc.quizTime).split(":");
@@ -79,9 +46,6 @@
 
     <link rel="icon" type="image/png" href="/assets/images/logo.png" />
 
-    <!-- Set before the stylesheets so .reveal elements never flash visible.
-         CSS keeps content visible unless this class is present, so a JS
-         failure leaves a readable page rather than a blank one. -->
     <script>
       document.documentElement.classList.add("js");
     </script>
@@ -159,8 +123,6 @@
             </ol>
           </nav>
 
-          <!-- The old page's only heading was the English "Some Rules of this
-               Exercise" inside a <span>, so the page had no h1 at all. -->
           <h1 class="page-hero__title">
             <% if (title) { %><em><%= title %></em><% } else { %>
             <em><%= K.a %></em><% } %>
@@ -171,9 +133,6 @@
       <section class="section">
         <div class="container">
           <% if (!doc) { %>
-          <!-- Reached when the record could not be loaded: a stale link, or an
-               exam outside its start/end window. The exam route answered a
-               bare 404 status page for this, with no way back. -->
           <div class="empty">
             <span class="empty__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="currentColor">
@@ -192,9 +151,6 @@
           </div>
 
           <% } else if (taken) { %>
-          <!-- Previously this case was only caught on POST, which answered the
-               raw string "<h1>you cant entered quiz agian </h1>" with a 400 —
-               English, unstyled, and with no way back to the platform. -->
           <div class="empty">
             <span class="empty__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="currentColor">
@@ -254,8 +210,6 @@
                   </li>
                 </ul>
 
-                <!-- Generated from the record instead of the four hard-coded
-                     English lines the template shipped with. -->
                 <h2 class="sr-only">التعليمات</h2>
                 <ol class="intro__rules">
                   <li>
@@ -278,10 +232,6 @@
                 </ol>
 
                 <div class="intro__actions">
-                  <!-- Posts to this same URL. The hidden-in-plain-sight
-                       contract is the button's name/value: every one of the
-                       three routes gates on `req.body.btn == "continue"` and
-                       silently does nothing without it. -->
                   <form method="post">
                     <button
                       class="btn btn--primary"

@@ -1,11 +1,5 @@
 <%- include("_head", { active: "quiz", title: "الكويزات" }) %>
 <%
-/* Quiz list + add form. Shares _assessment-form.ejs with homework.ejs and
-   exam.ejs; `kind` selects the differences (a quiz has a duration, no window).
-
-   The old copy of this page also had a broken script tag — its src was missing
-   the `admin/` path segment, so the sidebar menu toggle was dead on this page
-   only. The shared shell in _head.ejs makes that class of drift impossible. */
 %>
 <%- include("_assessment-form", { kind: "quiz" }) %>
 <%- include("_foot") %>

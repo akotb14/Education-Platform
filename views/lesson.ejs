@@ -6,19 +6,6 @@
     <meta name="theme-color" content="#fe3f40" />
 
     <%
-      /* Rendered only by routes/units.router.js
-             /content/:educetionlevel/:grade/:month/:id   (isMonth-guarded)
-         with { data, edu, grade, month }.
-
-         `data` is the matching row out of the unit document's `units` array,
-         and is undefined when the document is missing or when no row carries
-         that :id — a hand-typed or stale URL. Everything below is written for
-         that being undefined; the page renders a not-found state rather than
-         the header-and-footer-with-nothing-between it produced before.
-
-         Locals are still read behind typeof guards so the view stays safe if
-         another route ever renders it with a different shape, as units.ejs is
-         rendered by two callers today. */
       var SUBJECTS = { biology: "الأحياء", geology: "الجيولوجيا" };
       var GRADES = {
         "1st": "الصف الأول الثانوي",
@@ -36,8 +23,6 @@
       var row = (typeof data !== "undefined" && data && typeof data === "object") ? data : null;
       var title = row && row.unit ? String(row.unit) : "";
 
-      /* Built only from whitelisted values, so a crafted :edu / :grade cannot
-         steer where these point. Both fall back to the homepage. */
       var monthsHref = SUBJECTS[eduRaw] && GRADES[gradeRaw] ? "/" + eduRaw + "/" + gradeRaw : "/";
       var unitsHref =
         SUBJECTS[eduRaw] && GRADES[gradeRaw] && monthName
@@ -45,35 +30,12 @@
             encodeURIComponent(gradeRaw) + "/" + encodeURIComponent(monthName)
           : monthsHref;
 
-      /* A Google Drive FILE ID, embedded as /file/d/<id>/preview. Empty on a
-         unit that has a PDF or a quiz but no video. */
       var driveId = row && row.lesson ? String(row.lesson).trim() : "";
 
-      /* Uploaded PDFs land in ./documantion/ (middlewares/upload.js) and that
-         directory is mounted at the root by app.js:72, so the file is served
-         at /<filename>.
-
-         The old code did pdf.split('\\')[1] || pdf.split('/')[1], which takes
-         the SECOND segment rather than the last and so returned undefined for
-         any path deeper than one level. Splitting on both separators and
-         taking the last segment is correct on Windows and POSIX alike.
-
-         It also tested `data['pdf'] != ""` before calling .split on it — and
-         undefined != "" is true, so a row whose pdf field was never set threw
-         a TypeError inside render. Express sends render errors to its error
-         handler rather than the route's catch, so that surfaced as a 500. */
       var pdfRaw = row && row.pdf ? String(row.pdf).trim() : "";
       var pdfName = pdfRaw ? pdfRaw.split(/[\\/]/).pop() : "";
       var pdfHref = pdfName ? "/" + encodeURIComponent(pdfName) : "";
 
-      /* quizId and homeId are both set by controllers/quiz.contro.js onto
-         units.$.quizId / units.$.homeId, so they are symmetric.
-
-         The homework link used to be a hard-coded /openHomework, which lists
-         every homework on the platform for every grade — the student had to
-         find their own. When this row has a homeId it now links straight to
-         it, exactly as the quiz link already did, and only falls back to the
-         full list when the row has none. */
       var quizId = row && row.quizId ? String(row.quizId) : "";
       var homeId = row && row.homeId ? String(row.homeId) : "";
       var homeHref = homeId ? "/homework/" + encodeURIComponent(homeId) : "/openHomeWork";
@@ -91,9 +53,6 @@
 
     <link rel="icon" type="image/png" href="/assets/images/logo.png" />
 
-    <!-- Set before the stylesheets so .reveal elements never flash visible.
-         CSS keeps content visible unless this class is present, so a JS
-         failure leaves a readable page rather than a blank one. -->
     <script>
       document.documentElement.classList.add("js");
     </script>
@@ -181,10 +140,6 @@
             </ol>
           </nav>
 
-          <!-- The old page's only <h1> read "education from home" — English
-               boilerplate from the theme, on an Arabic page, repeated on every
-               lesson. The unit's own name was never shown at all, so a student
-               could not tell which lesson they had opened. -->
           <h1 class="page-hero__title">
             <% if (title) { %><em><%= title %></em><% } else { %>
             <em>الدرس</em><% } %>
@@ -213,10 +168,6 @@
       <section class="section">
         <div class="container">
           <% if (!row) { %>
-          <!-- Reached by a stale or hand-typed :id. The route used to answer
-               the bare string "lesson is not added" for a missing unit doc,
-               and this template used to render its header and footer with an
-               empty gap between them for a missing row. -->
           <div class="empty">
             <span class="empty__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="currentColor">
@@ -246,9 +197,6 @@
                 allowfullscreen
                 loading="lazy"
               ></iframe>
-              <!-- Carried over from the original page verbatim; see the note
-                   on .player__guard in lesson.css for why this one uses
-                   physical top/right rather than logical insets. -->
               <div class="player__guard" aria-hidden="true"></div>
             </div>
 
@@ -262,9 +210,6 @@
             <% } %>
           </div>
 
-          <!-- Homework, quiz and PDF. Each was previously a bare link inside
-               an <h1><p> pair — invalid nesting that makes the parser close
-               the h1 before the p even opens. -->
           <div class="res-grid">
             <div class="card-stage reveal">
               <a class="card res-card" href="<%= homeHref %>" data-tilt>
@@ -305,8 +250,6 @@
             </div>
             <% } %> <% if (pdfHref) { %>
             <div class="card-stage reveal">
-              <!-- Opens in a new tab: navigating away from the lesson to read
-                   a PDF loses the video's playback position. -->
               <a
                 class="card res-card res-card--pdf"
                 href="<%= pdfHref %>"

@@ -12,9 +12,6 @@
 
     <link rel="icon" type="image/png" href="/assets/images/logo.png" />
 
-    <!-- Set before the stylesheets so .reveal elements never flash visible.
-         CSS keeps content visible unless this class is present, so a JS
-         failure leaves a readable page rather than a blank one. -->
     <script>
       document.documentElement.classList.add("js");
     </script>
@@ -35,8 +32,6 @@
   <body oncontextmenu="return false;">
     <a class="sr-only" href="#main">تخطي إلى المحتوى</a>
 
-    <!-- Reading-progress bar. Decorative: it duplicates the scrollbar, so it
-         is hidden from assistive tech rather than given a progressbar role. -->
     <div class="scroll-progress" aria-hidden="true"></div>
 
     <header class="site-header">
@@ -60,9 +55,6 @@
 
         <nav class="site-nav" id="site-nav" aria-label="التنقل الرئيسي">
           <ul class="site-nav__list">
-            <!-- Same-page links only. home.js marks the one in view with
-                 aria-current; it never touches /login or /logout, which is
-                 what the old theme's scrollspy choked on. -->
             <li><a class="site-nav__link" href="#courses">الصفوف</a></li>
             <li><a class="site-nav__link" href="#activities">الاختبارات</a></li>
             <li><a class="site-nav__link" href="#faq">أسئلة شائعة</a></li>
@@ -102,10 +94,7 @@
     </header>
 
     <main id="main">
-      <!-- ============================================================ hero -->
       <section class="hero grain">
-        <!-- Decorative depth layers. The canvas is painted by home.js and is
-             skipped entirely under prefers-reduced-motion. -->
         <canvas class="hero__canvas" aria-hidden="true"></canvas>
         <span
           class="blob blob--1 parallax"
@@ -119,10 +108,6 @@
         ></span>
 
         <div class="container">
-          <!-- data-tilt sits on the grid, not the video: the Streamable iframe
-               swallows pointer events, so a listener on the frame itself would
-               only ever fire on its 1px edge. Custom properties inherit, so
-               --rx/--ry set here still reach .hero__video. -->
           <div class="hero__grid" data-tilt>
             <div class="reveal">
               <p class="hero__eyebrow">منصة أ/ مرڤت عبدالرحمن</p>
@@ -164,16 +149,11 @@
                 ></iframe>
               </div>
 
-              <!-- Siblings of the frame, not children: .hero__video is
-                   overflow: hidden and would clip them. -->
               <span class="hero__chip hero__chip--a">شرح بالنظام الحديث</span>
               <span class="hero__chip hero__chip--b">اختبارات دورية</span>
             </div>
           </div>
 
-          <!-- Every figure here is read off the page itself: 30+ years from the
-               hero copy, 4 courses and 3 assessment types from the sections
-               below. Nothing invented. -->
           <div class="stats reveal-group">
             <div class="stat reveal">
               <p class="stat__num" data-count="30" data-suffix="+">30+</p>
@@ -191,11 +171,6 @@
         </div>
       </section>
 
-      <!-- ========================================================= marquee -->
-      <!-- Every phrase here restates the features section below, so the whole
-           strip is decorative and hidden from assistive tech. That also avoids
-           reading the duplicated track twice. (aria-label alone would have
-           done nothing — it is ignored on a role-less div.) -->
       <div class="marquee" aria-hidden="true">
         <div class="marquee__track">
           <ul class="marquee__list">
@@ -217,7 +192,6 @@
         </div>
       </div>
 
-      <!-- ======================================================== features -->
       <section class="section" id="about">
         <div class="container features__layout">
           <div class="features__art parallax reveal" data-speed="0.08">
@@ -319,7 +293,6 @@
         </div>
       </section>
 
-      <!-- ========================================================= courses -->
       <section class="section section--alt grain" id="courses">
         <span
           class="blob blob--1 parallax"
@@ -426,7 +399,6 @@
         </div>
       </section>
 
-      <!-- ====================================================== activities -->
       <section class="section" id="activities">
         <div class="container">
           <div class="section__head reveal">
@@ -507,7 +479,6 @@
         </div>
       </section>
 
-      <!-- =========================================================== steps -->
       <section class="section" id="how">
         <div class="container">
           <div class="section__head reveal">
@@ -518,8 +489,6 @@
             </p>
           </div>
 
-          <!-- The step numbers come from a CSS counter, so reordering these in
-               the markup renumbers them automatically. -->
           <ol class="steps reveal-group">
             <li class="step reveal reveal--depth">
               <span class="step__badge" aria-hidden="true"></span>
@@ -554,7 +523,6 @@
         </div>
       </section>
 
-      <!-- ============================================================= faq -->
       <section class="section" id="faq">
         <div class="container">
           <div class="section__head reveal">
@@ -565,9 +533,6 @@
             </p>
           </div>
 
-          <!-- Native details/summary: keyboard operable, findable by the
-               browser's in-page search, and readable with CSS or JS disabled.
-               No JS behind this at all. -->
           <div class="faq reveal-group">
             <details class="faq__item reveal">
               <summary class="faq__q">
@@ -692,7 +657,6 @@
         </div>
       </section>
 
-      <!-- ========================================================= contact -->
       <section class="section section--alt grain" id="contact">
         <span
           class="blob blob--2 parallax"
@@ -711,9 +675,6 @@
                 من خارج السويس يرجى الحجز من خلال الأرقام:
               </p>
 
-              <!-- Each number is its own isolated LTR run. Two Latin digit
-                   runs sharing one RTL paragraph render in swapped visual
-                   order otherwise. -->
               <div class="contact__phones">
                 <a class="phone" dir="ltr" href="tel:+201093172264" data-magnetic>
                   <svg
@@ -744,12 +705,6 @@
                 </a>
               </div>
 
-              <!-- wa.me, not the whatsapp:// scheme the other views use: the
-                   custom scheme only resolves if the app is installed and
-                   silently dead-ends on desktop. wa.me needs the country code,
-                   so the local 011… number is written as 2011…
-
-                   No YouTube link here — the one in login.ejs is href="#". -->
               <div class="channels">
                 <a
                   class="chan chan--wa"
@@ -790,9 +745,6 @@
           </div>
         </div>
       </section>
-      <!-- ======================================================== cta band -->
-      <!-- The two branches differ: a visitor is pushed to log in, a signed-in
-           student is pushed back into the courses they already have. -->
       <section class="cta-band grain">
         <span
           class="blob blob--1 parallax"
@@ -851,8 +803,6 @@
       </div>
     </footer>
 
-    <!-- Back to top. A real <button>, and it stays out of the tab order until
-         it is actually on screen (visibility: hidden until [data-show]). -->
     <button class="to-top" type="button" data-to-top>
       <span class="sr-only">العودة إلى أعلى الصفحة</span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
